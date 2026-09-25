@@ -53,7 +53,9 @@ Two bugs it fixes from the version it replaced:
   chart reads, so a typo produced a PR that changed nothing.
 - **Can run twice.** The original checked for its branch with `git rev-parse`
   against a shallow clone, so the check never matched and a re-run failed on
-  push.
+  push. The replacement fetches the `promote/*` branch before pushing to it -
+  `--force-with-lease` needs that ref locally or it rejects as "stale info"
+  even on a clean re-run.
 
 `dry_run: true` by default, printing the diff and stopping.
 

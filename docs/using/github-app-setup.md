@@ -69,7 +69,12 @@ In every caller, immediately before `update-helm-chart`:
           image-tag: ${{ needs.promote-image.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
+          commit-user-name: ${{ steps.helm-app-token.outputs.app-slug }}[bot]
+          commit-user-email: ${{ vars.HELM_BOT_APP_ID }}+${{ steps.helm-app-token.outputs.app-slug }}[bot]@users.noreply.github.com
 ```
+
+Without `commit-user-name`/`commit-user-email` the commit falls back to
+`github.actor` - a person, not the App that actually pushed it.
 
 The rendered templates already do this — the block is here for reference.
 `repositories:` scopes the *generated token* too, on top of the App only being

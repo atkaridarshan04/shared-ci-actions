@@ -85,3 +85,7 @@ coverage that isn't there.
 - **Consumers reference this repo by ref.** Changing an action on `main`
   changes every consumer immediately. Cut a release (`release.yml`) rather
   than relying on that.
+- **`${{ }}` is evaluated anywhere in an `action.yml`, including inside
+  `description:` text** — not just `with:`/`run:`. A literal example like
+  `${{ steps.x.outputs.y }}` written into a description breaks the action
+  at load time. `verify.sh`'s YAML parse won't catch it.
