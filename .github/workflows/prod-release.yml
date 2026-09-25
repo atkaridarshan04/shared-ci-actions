@@ -1,0 +1,132 @@
+name: Prod - promote a release tag
+
+# Sets every service's imageTag in the prod values file to one release tag
+# and opens a PR. Replaces prod-automation.yaml, which hardcoded thirteen
+# yq calls and could not create its branch twice.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to promote, e.g. 1.4.0"
+        required: true
+        type: string
+      base_branch:
+        description: "Branch in the prod charts repo to open the PR against"
+        required: true
+        default: "main"
+      dry_run:
+        description: "Show the resulting diff only - push nothing, open no PR"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  HELM_REPO: atkaridarshan04/test-prod-helm-charts
+  VALUES_FILE: prod/values.yaml
+  YQ_VERSION: v4.53.6
+  # One yq path per line. Add a line here when a service is onboarded to prod;
+  # nothing else in this workflow needs to change.
+  SERVICE_PATHS: |
+    .services.api.imageTag
+    .services.web.imageTag
+    .services.worker.imageTag
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.release_tag }} to prod
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout prod charts repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.HELM_REPO }}
+          ref: ${{ inputs.base_branch }}
+          token: ${{ secrets.AUTOMATION_PAT }}
+
+      - name: Install yq
+        run: |
+          set -euo pipefail
+          if command -v yq >/dev/null 2>&1; then
+            echo "yq already present: $(yq --version)"
+            exit 0
+          fi
+          sudo curl -fsSL \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+            -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set imageTags
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          [ -f "$VALUES_FILE" ] || { echo "::error::$VALUES_FILE not found in $HELM_REPO"; exit 1; }
+
+          COUNT=0
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            # fail loudly rather than silently creating a key that no chart reads
+            if [ "$(yq eval "$path // \"__missing__\"" "$VALUES_FILE")" = "__missing__" ]; then
+              echo "::error::$path does not exist in $VALUES_FILE"
+              exit 1
+            fi
+            yq eval "$path = strenv(RELEASE_TAG)" -i "$VALUES_FILE"
+            COUNT=$((COUNT + 1))
+          done <<< "$SERVICE_PATHS"
+
+          echo "Updated $COUNT imageTags to $RELEASE_TAG"
+          git --no-pager diff -- "$VALUES_FILE"
+
+      - name: Push branch and open PR
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMATION_PAT }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          BASE_BRANCH: ${{ inputs.base_branch }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          BRANCH="promote/${RELEASE_TAG}"
+
+          if git diff --quiet -- "$VALUES_FILE"; then
+            echo "Prod already pins every service to ${RELEASE_TAG} - nothing to do."
+            exit 0
+          fi
+
+          git config user.name "$ACTOR"
+          git config user.email "${ACTOR}@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "$VALUES_FILE"
+          git commit -m "Promote ${RELEASE_TAG} to prod"
+
+          # the old workflow assumed the branch was new; re-running a promote
+          # after a fixup has to update the existing branch, not fail on it
+          git push --force-with-lease origin "HEAD:${BRANCH}"
+
+          if gh pr list --repo "$HELM_REPO" --head "$BRANCH" --base "$BASE_BRANCH" \
+               --json number --jq '.[].number' | grep -q .; then
+            echo "PR already open for $BRANCH - it now carries the updated commit."
+          else
+            gh pr create --repo "$HELM_REPO" \
+              --base "$BASE_BRANCH" --head "$BRANCH" \
+              --title "Promote ${RELEASE_TAG} to prod" \
+              --body "Sets every prod imageTag to \`${RELEASE_TAG}\`."
+          fi
+
+      - name: Summary
+        if: always()
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "### Prod promote"
+            echo ""
+            echo "- **Tag:** \`$RELEASE_TAG\`"
+            echo "- **Repo:** \`$HELM_REPO\`"
+            echo "- **File:** \`$VALUES_FILE\`"
+            echo "- **Dry run:** \`$DRY_RUN\`"
+          } >> "$GITHUB_STEP_SUMMARY"
