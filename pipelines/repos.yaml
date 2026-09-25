@@ -28,3 +28,9 @@ test-web:
   helm_key: .services.web.imageTag
   semgrep_configs: "p/javascript p/typescript p/react p/nextjs p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
   dockerfile_target: runtime
+
+test-worker:
+  service_name: worker
+  service_label: worker
+  helm_key: .services.worker.imageTag
+  semgrep_configs: "p/python p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
