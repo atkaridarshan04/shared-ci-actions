@@ -89,6 +89,7 @@ defaults:
   integration_branch: develop        # triggers, PR base, promote's base-branch
   helm_repo: owner/charts-repo       # also scopes the App token
   runner: ubuntu-latest
+  actions_ref: main                  # which version of THIS repo pipelines call
 
 repos:
   my-service:
@@ -98,7 +99,7 @@ repos:
 ```
 
 Registry, release-branch pattern, and values paths are deliberately **not**
-configurable — see [install-pipeline](docs/using/install-pipeline.md#what-isnt-configurable)
+configurable — see [install-pipeline](docs/using/install-pipeline.md#not-configurable)
 for why.
 
 ---
@@ -112,6 +113,6 @@ for why.
 - [`CLAUDE.md`](CLAUDE.md) has the full set.
 
 > [!NOTE]
-> Templates currently reference `@main`, so every commit here reaches
-> consumers immediately. Once you cut `v1`, switch them to `@v1` — see
-> [versioning](docs/maintaining/versioning.md).
+> `actions_ref` is `main`, so every commit here reaches consumers
+> immediately. After cutting `v1`, set it to `v1` — one value, no template
+> edits. See [versioning](docs/maintaining/versioning.md).

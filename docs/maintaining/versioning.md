@@ -1,103 +1,92 @@
-# Versioning, releases, and keeping pins current
+# Versioning, releases, and pins
 
-Consumers reference these actions by ref:
+Consumers reference these actions by ref, so **the ref is the whole API
+surface**:
 
 ```yaml
 - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@main
 ```
 
-Whatever that ref resolves to is what runs in their pipeline. That makes the
-ref the whole API surface, and it's why this page exists.
-
-## The problem with `@main`
-
-The templates currently point at `@main`. That means **every commit here
-reaches every consumer on their next run**, with no way for them to pin, stage
-an upgrade, or roll back. A bad merge is a fleet-wide incident, not a revert.
-
-CLAUDE.md already forbids `@main` for third-party actions, for exactly this
-reason. Pointing consumers at our own `@main` is the same risk aimed inward.
+`@main` means every commit here reaches every consumer on their next run —
+no pinning, no staged upgrade, no rollback. A bad merge becomes a fleet-wide
+incident. CLAUDE.md already forbids `@main` for third-party actions; this is
+the same risk aimed inward.
 
 ## The release scheme
 
 [`release.yml`](workflows.md#releaseyml) cuts an immutable `vX.Y.Z` tag and
-force-moves a `vX` tag to it — the scheme `actions/checkout` and friends use.
+force-moves `vX` to it — the scheme `actions/checkout` uses.
 
-| Ref | Mutability | Who should use it |
+| Ref | Moves | Use it for |
 |---|---|---|
-| `@v1.2.0` | never moves | pinning to an exact release |
-| `@v1` | moves on every 1.x release | **the normal choice** — fixes, no breaking changes |
-| `@main` | moves on every commit | this repo's own testing, nothing else |
+| `@v1.2.0` | never | pinning to an exact release |
+| `@v1` | every 1.x release | **the normal choice** — fixes, no breaking changes |
+| `@main` | every commit | this repo's own testing only |
 
-The force-push applies only to the major tag. That's not a workaround — a
-moving major tag is what makes `@v1` mean "latest 1.x", and it's the one tag
-that's *supposed* to move.
+Force-pushing applies only to the major tag — a moving `vX` is what makes
+`@v1` mean "latest 1.x".
 
-To cut a release: dispatch `release.yml` with a bare `X.Y.Z`. It refuses a
-leading `v`, a prerelease suffix, and any version that already exists, and it
-runs `verify.sh` first so a release can't be cut from a broken tree.
+Dispatch with a bare `X.Y.Z`. It rejects a leading `v`, prerelease suffixes,
+and existing versions, and runs `verify.sh` so a release can't come from a
+broken tree.
 
-### After the first release
+### Pointing pipelines at the release
 
-Change the refs in `pipelines/templates/*.tmpl` from `@main` to `@v1`. That's
-the one-line change that makes all of the above real; until `v1` exists there
-is no pinned ref to point at.
+Set `actions_ref: v1` in `pipelines/repos.yaml` — one value renders into every
+`uses:` of every generated pipeline. It ships as `main` because until `v1`
+exists there's nothing to point at.
 
-## What counts as a breaking change
+`release.yml` **checks** this rather than doing it: cutting `v2.0.0` while
+`actions_ref` is still `v1` fails with an explanation. Automating the rewrite
+would mean pushing a commit mid-release, and the ordering is a trap — commit
+after tagging and `v1.0.0` points at a tree still saying `main`; commit before
+and your release workflow pushes to `main`, which breaks under branch
+protection. A major bump is also a breaking change, which is exactly when a
+human should be deciding and telling consumers.
 
-For a composite action, the contract is its inputs, its outputs, and its
-observable side effects. Bump **major** for:
+## What counts as breaking
+
+The contract is an action's inputs, outputs, and observable side effects.
+**Major** for:
 
 - removing or renaming an input or output
 - making an optional input required
-- changing a default in a way that changes behaviour for someone who didn't
-  set it (e.g. flipping `fail-on-findings` to `false`)
+- changing a default that changes behaviour for someone who never set it
 - changing what a step writes, pushes, or tags
 
-Bump **minor** for a new optional input with a backward-compatible default, or
-a new action. **Patch** for fixes that don't change the contract.
+**Minor** for a new optional input with a compatible default, or a new action.
+**Patch** for fixes that don't touch the contract.
 
-Two that look safe and are not:
+Two that look safe and aren't:
 
-- **Tightening a gate.** Making a scan stricter breaks builds that passed
-  yesterday. Technically compatible, practically a major.
-- **Changing a tag format.** `promote-candidate-image` emits
-  `<sha>-<component>`; anything downstream parsing that will break.
+- **Tightening a gate** — a stricter scan breaks builds that passed
+  yesterday. Technically compatible, practically major.
+- **Changing a tag format** — `promote-candidate-image` emits
+  `<sha>-<component>`; anything parsing that breaks.
 
 ## Dependabot
 
 [`.github/dependabot.yml`](../../.github/dependabot.yml) watches the
-`github-actions` ecosystem weekly and opens PRs bumping SHA pins, with the
-version comment updated.
+`github-actions` ecosystem weekly and opens PRs bumping SHA pins.
 
-This is what makes pinning sustainable. Pinned *without* it, pins rot: the
-SHAs stay frozen while the actions move on, and the convention becomes a
-liability — you get the maintenance cost of pinning with none of the currency
-of floating.
+This is what makes pinning sustainable. Without it pins rot — you get the
+maintenance cost of pinning and none of the currency of floating.
 
-### Its blind spot
-
-Dependabot reads `.github/workflows/` and composite `action.yml` files. It
-does **not** read `pipelines/templates/*.tmpl` — they aren't workflow files as
-far as it's concerned.
-
-So template pins are manual. `verify.sh` enforces that they stay *pinned* and
-carry a version comment, but nothing tells you they've gone *stale*. When
-Dependabot bumps an action in an `action.yml`, check whether the same action
-appears in a template and bump it by hand:
+**Blind spot:** it reads `.github/workflows/` and composite `action.yml` files,
+not `pipelines/templates/*.tmpl`. Template pins are manual. `verify.sh` proves
+they stay *pinned*, but nothing tells you they're *stale*. When Dependabot
+bumps an action, check whether a template uses it too:
 
 ```
 grep -rn 'uses:.*@' pipelines/templates/
 gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
 ```
 
-This is the most likely thing on this page to be silently wrong six months
-from now.
+This is the most likely thing here to be quietly wrong in six months.
 
-## Communicating a release
+## Announcing a release
 
-There's no changelog file. For a repo whose consumers are pipelines rather
-than humans, the tag message and the PR history are usually enough — but if
-you cut a major, the consumers won't find out from Dependabot (it doesn't
-track this repo's own tags in their repos unless they use `@vX.Y.Z`). Tell
-them, or expect `@v1` consumers to sit on v1 forever.
+There's no changelog — tag messages and PR history are enough for consumers
+that are pipelines. But Dependabot won't tell anyone about a **major**: it
+doesn't track this repo's tags unless they pin `@vX.Y.Z`. Tell them, or expect
+`@v1` consumers to sit on v1 forever.

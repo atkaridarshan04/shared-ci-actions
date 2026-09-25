@@ -1,9 +1,7 @@
 # Workflows in this repo
 
-Four workflows, all running on this repo. The pipelines installed *into app
-repos* are a different thing entirely — those live in
-[`pipelines/templates/`](../../pipelines/templates) and are documented under
-[`docs/using/`](../using/dev-pipeline.md).
+These run *here*. The pipelines installed into app repos are a different
+thing — see [`docs/using/`](../using/dev-pipeline.md).
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
@@ -14,105 +12,73 @@ repos* are a different thing entirely — those live in
 
 ## `ci.yml`
 
-Runs [`scripts/verify.sh`](../../scripts/verify.sh) — the same command you run
+Runs [`verify.sh`](../../scripts/verify.sh) — the same command you run
 locally — plus `actionlint`, which catches invalid `${{ }}` expressions and
-bad `needs:` references that a plain YAML parse accepts, and runs shellcheck
-over every `run:` block.
-
-This repo's product *is* YAML and bash, so this is the only thing between a
-typo and a broken pipeline in every consumer repo. See
-[`verifying.md`](verifying.md) for what it covers and what it doesn't.
+bad `needs:` references that a YAML parse accepts, and shellchecks every
+`run:` block. See [verifying](verifying.md).
 
 ## `release.yml`
 
-Cuts an immutable `vX.Y.Z` tag and force-moves the `vX` tag to it, so
-consumers can reference `@v1` and receive fixes without receiving breaking
-changes.
+Cuts an immutable `vX.Y.Z` tag and force-moves `vX` to it. Refuses to reuse a
+version tag, requires a bare `X.Y.Z`, runs `verify.sh` first, and refuses to
+cut a major while `actions_ref` still names the previous one.
 
-It refuses to reuse an existing version tag, requires a bare `X.Y.Z` (no
-leading `v`, no prerelease suffix), and runs `verify.sh` before tagging so a
-release can't be cut from a broken tree.
-
-[`versioning.md`](versioning.md) covers the rest: what counts as a breaking
-change, how consumers should pin, and why the templates still point at
-`@main`.
+See [versioning](versioning.md) for what counts as breaking, and why that last
+check is a guard rather than an automatic rewrite.
 
 ## `fleet-branch.yml`
 
-Creates one branch across many repos. Replaces the old `release-branch` +
-`hotfix-release` pair, which were the same operation differing only in source
-branch — a release cut is `from_branch: develop`, a hotfix cut is
-`from_branch: release-x.y.z`.
+One branch across many repos. A release cut is `from_branch: develop`; a
+hotfix cut is `from_branch: release-x.y.z` — the same operation, which is why
+it's one workflow.
 
-Three things it does that the originals didn't:
+- **Git refs API, not a clone per repo** — one request, nothing to clean up.
+- **One matrix job per repo, `fail-fast: false`** — a single loop meant repo 3
+  of 13 failing left repos 4–13 unrun with no record of what happened. Each
+  repo now succeeds or fails independently and writes a summary row.
+- **`dry_run: true` by default** — resolves every source branch and reports
+  what it would create.
 
-- **Uses the Git refs API**, not a clone per repo. One request, nothing to
-  clean up, no `git` subprocess handling.
-- **Runs one matrix job per repo with `fail-fast: false`.** The originals
-  looped inside a single job, so repo 3 of 13 failing meant repos 4–13 never
-  ran and nothing recorded what had happened. Now each repo succeeds or fails
-  independently and writes a row to the job summary.
-- **Defaults to `dry_run: true`.** Resolves every source branch and reports
-  what it would create, without creating it.
-
-Re-running is safe: a repo that already has the branch is reported and
-skipped, not failed.
+Re-running is safe: a repo that already has the branch is skipped, not failed.
 
 ## `prod-release.yml`
 
 Sets every service's `imageTag` in the prod values file to one release tag and
-opens a PR against the prod charts repo.
+opens a PR. The service list is newline-separated yq paths in the workflow's
+`env:` — add a line to onboard a service.
 
-The service list is a newline-separated set of yq paths in the workflow's
-`env:` block — add a line to onboard a service. The original hardcoded
-thirteen separate `yq` calls.
+Two bugs it fixes from the version it replaced:
 
-It also fixes two real bugs from that version:
+- **Verifies each path exists before writing.** `yq` happily creates a key no
+  chart reads, so a typo produced a PR that changed nothing.
+- **Can run twice.** The original checked for its branch with `git rev-parse`
+  against a shallow clone, so the check never matched and a re-run failed on
+  push.
 
-- **It verifies each path exists before writing.** `yq` happily creates a key
-  that no chart reads, so a typo used to produce a silently ineffective PR.
-- **It can run twice.** The original assumed its branch was new; a shallow
-  clone meant the "does this branch exist" check never matched, so a re-run
-  after a fixup failed on push. This force-pushes with lease and reuses an
-  open PR.
-
-Defaults to `dry_run: true`, which prints the resulting diff and stops.
+`dry_run: true` by default, printing the diff and stopping.
 
 ## Deliberately not carried over
 
-Two workflows from the internal setup were dropped rather than genericized.
+Two workflows were dropped rather than genericized.
 
-**`custom-deployment`** cloned app repos, copied `dev-deploy.yaml` to
-`deploy-<env>.yaml`, regex-rewrote the values path and trigger blocks, and
-force-pushed — no PR. [`install-pipeline.sh`](../../scripts/install-pipeline.sh)
-already does that job properly: it renders from a template, validates the
-result parses, and opens a PR. Keeping both would mean maintaining the worse
-one.
+**`custom-deployment`** cloned app repos, regex-rewrote their workflow files,
+and force-pushed without a PR.
+[`install-pipeline.sh`](../../scripts/install-pipeline.sh) already does that
+job properly — renders from a template, validates it parses, opens a PR.
 
-**`automated-env`** provisioned a new environment by copying a rendered chart
-directory and running ~190 lines of `sed` over it — rewriting namespaces,
-hostnames, secret keys, and env vars by pattern. That is templating,
-implemented as regex, in a stack that already runs Helm. Two problems made it
-not worth porting:
+**`automated-env`** provisioned an environment by copying a rendered chart
+directory and running ~190 lines of `sed` over it. That's templating
+implemented as regex, in a stack already running Helm. Every environment
+became a duplicated directory that drifts permanently, and patterns like
+`s/nonprod/${ENV}/g` rewrote that string anywhere it appeared. The
+replacement isn't a workflow — it's `values-<env>.yaml` against one chart.
 
-- Every environment became a *duplicated directory*, so each one drifts from
-  the source permanently. N environments means N copies to keep in sync by
-  hand.
-- The patterns matched more than they meant to. `s/nonprod/${ENV}/g` rewrites
-  that string anywhere it appears, not only in the fields intended.
+## Credentials
 
-The replacement isn't a workflow — it's modelling environments as Helm values
-(`values-<env>.yaml`) against one chart, which is what the chart is for. If a
-one-click env bootstrap is still wanted later, it should generate a values
-file, not a directory tree.
+`fleet-branch` and `prod-release` use `secrets.AUTOMATION_PAT`, not the GitHub
+App the pipelines use. The App is installed on the charts repo only — which is
+the point of it — while these need write access across many repos.
 
-## A note on credentials
-
-`fleet-branch` and `prod-release` use `secrets.AUTOMATION_PAT`, not the
-GitHub App the pipelines use. That's deliberate: the App is installed on the
-charts repo only, which is the point of it, while these two need write access
-across many repos.
-
-If you want to remove the PAT, the options are a second App installed on the
-app repos, or narrowing these workflows until `GITHUB_TOKEN` suffices. Both
-are real work — don't swap the credential without deciding which.
+Removing the PAT means either a second App installed on the app repos, or
+narrowing these until `GITHUB_TOKEN` suffices. Both are real work; don't swap
+the credential without picking one.

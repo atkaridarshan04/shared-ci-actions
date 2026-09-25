@@ -4,60 +4,52 @@
 ./scripts/verify.sh
 ```
 
-No arguments, runnable from anywhere. This is exactly what CI runs — if it
-passes locally, CI's `verify` job passes.
+No arguments, runnable from anywhere. Exactly what CI runs — pass locally,
+pass in CI.
 
-| Check | What it catches |
+| Check | Catches |
 |---|---|
 | YAML syntax | a malformed action or workflow file |
 | Template render | a template that no longer renders against every repo entry |
 | Template parse | rendered output that isn't valid YAML |
 | Placeholder leak | `{{NAME}}` surviving into output |
 | SHA pins | a third-party `uses:` on a floating tag, or missing its version comment |
-| shellcheck | script bugs, when shellcheck is installed locally |
+| shellcheck | script bugs, when installed locally |
 
-## Why the placeholder check exists separately
+**Why the placeholder check is separate:** a leaked `{{SERVICE_NAME}}` is
+often *valid YAML*. It parses fine and fails only at runtime, in someone
+else's repo. Detect it in Python, not `grep` — a bare `{{` also matches
+GitHub's `${{ }}`, and ugrep rejects `{{` as a malformed quantifier.
+`check_templates.py` uses a `(?<!\$)` lookbehind.
 
-A leaked `{{SERVICE_NAME}}` is often *valid YAML*. It parses fine and fails
-only when the workflow actually runs, in someone else's repo. Parsing alone
-doesn't catch it, so the check is a distinct step.
+## What it doesn't cover
 
-Detect it in Python, not with `grep`: a bare `{{` also matches GitHub's own
-`${{ }}` expressions, and some greps (ugrep) reject `{{` outright as a
-malformed repeat quantifier. `check_templates.py` uses a `(?<!\$)` lookbehind.
-
-## What verify.sh does not cover
-
-**Behaviour.** It proves the YAML is well-formed and the templates render; it
-never executes a `run:` block. For new shell or Python logic, dry-run it
-outside GitHub Actions:
+**Behaviour.** Nothing executes a `run:` block. Dry-run new shell or Python
+logic outside Actions:
 
 1. Extract the `run:` string with `yaml.safe_load` — this also proves what the
-   block scalar's indentation actually collapses to.
-2. Substitute any `${{ github.* }}` expressions by hand. Bash chokes on a
-   literal `${{ }}`; that's a test-harness artifact, not a real bug.
-3. Stub out `curl`, `gh`, and anything else that would hit the network.
-4. Run it with `bash`, covering the failure paths as well as the happy one.
+   block scalar's indentation collapses to.
+2. Substitute `${{ github.* }}` by hand. Bash chokes on a literal `${{ }}`;
+   that's a harness artifact, not a bug.
+3. Stub `curl`, `gh`, anything touching the network.
+4. Run with `bash`, covering failure paths, not just the happy one.
 
-**Workflow semantics.** `actionlint` covers that, and runs in CI: invalid
-`${{ }}` expressions, bad `needs:` references, a key used in a context that
-doesn't provide it, plus shellcheck over every `run:` block. Install it
-locally if you're changing workflow logic.
+**Workflow semantics.** `actionlint` covers those in CI — invalid `${{ }}`,
+bad `needs:`, a key in a context that doesn't provide it, plus shellcheck on
+every `run:` block.
 
 ## Adding a check
 
-Confirm it fails on deliberately broken input before you trust it. A check
-that can't go red reads as coverage that isn't there — worse than no check,
-because it stops anyone looking.
-
-Both existing checkers were validated this way: the pin check against an
-injected `@v4`, the template check against a typo'd placeholder.
+Confirm it fails on deliberately broken input first. A check that can't go red
+reads as coverage that isn't there — worse than none, because it stops anyone
+looking. Both existing checkers were validated this way: the pin check against
+an injected `@v4`, the template check against a typo'd placeholder.
 
 ## Known gaps
 
-- Nothing renders the *installed* pipeline against a real repo. The templates
-  are verified as YAML, not executed.
-- `actionlint` reads `.github/workflows/` only. It does not lint composite
-  `action.yml` files or `pipelines/templates/*.tmpl`.
-- Nothing detects a stale SHA pin — only an unpinned one. See
-  [`versioning.md`](versioning.md).
+- Nothing runs an *installed* pipeline. Templates are verified as YAML, not
+  executed.
+- `actionlint` reads `.github/workflows/` only — not composite `action.yml`
+  files or templates.
+- Nothing detects a *stale* SHA pin, only an unpinned one. See
+  [versioning](versioning.md).

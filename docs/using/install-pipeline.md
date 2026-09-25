@@ -1,12 +1,11 @@
 # Installing a pipeline into a repo
 
-`scripts/install-pipeline.sh` renders a stage template against a repo's entry
-in `pipelines/repos.yaml` and opens a PR adding it. One repo and one stage at
-a time — deliberately not a bulk operation.
+`scripts/install-pipeline.sh` renders a stage template against a repo's config
+and opens a PR adding it. One repo, one stage at a time — not a bulk
+operation.
 
-Prerequisites: `PyYAML` (`pip install pyyaml`), and `gh auth login` under an
-account with push access to the target repo. The script runs as you; there is
-no stored credential.
+Needs `PyYAML` and `gh auth login` under an account with push access to the
+target. It runs as you; there's no stored credential.
 
 ```
 scripts/install-pipeline.sh <repo-name> <dev|qa> [--force]
@@ -16,49 +15,38 @@ scripts/install-pipeline.sh <repo-name> <dev|qa> [--force]
 |---|---|
 | `repo-name` | must have an entry in `pipelines/repos.yaml` |
 | stage | `dev` or `qa` |
-| `--force` | replace the stage file if the repo already has one |
+| `--force` | replace the stage file if one already exists |
 
-Environment overrides:
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `GITHUB_OWNER` | `atkaridarshan04` | account that owns the target repo |
-| `BASE_BRANCH` | `develop` | branch to clone, and the PR's base |
+| Env override | Default |
+|---|---|
+| `GITHUB_OWNER` | `atkaridarshan04` |
+| `BASE_BRANCH` | the repo's `integration_branch` |
 
 ```
 scripts/install-pipeline.sh test-api dev
 GITHUB_OWNER=someone-else scripts/install-pipeline.sh test-web qa
 ```
 
-## What it does
+It renders **before cloning anything**, so a bad config fails with no side
+effects; clones shallow; refuses to overwrite without `--force`; then parses
+the result as YAML before committing it to a `ci/add-<stage>-pipeline` branch
+and opening a PR.
 
-1. Renders `pipelines/templates/<stage>.yml.tmpl` against the repo's entry in
-   `pipelines/repos.yaml` — **before cloning anything**, so a bad or missing
-   config fails with no side effects.
-2. Clones the target repo at `BASE_BRANCH`, shallow.
-3. Refuses to overwrite an existing stage file unless `--force`.
-4. Writes `.github/workflows/<stage>.yml`, parses it to confirm it's valid
-   YAML, commits it on a `ci/add-<stage>-pipeline` branch, and opens a PR.
-
-## Why it refuses unknown repos
-
-The script will not run against a repo with no entry in
-`pipelines/repos.yaml`. Build args, Semgrep configs, and the values-file key
-cannot be inferred by pattern-matching against other repos — a guessed entry
-ships a broken pipeline into a real repo, not just a bad doc. Read the target
-repo's Dockerfile and existing CI, then add the entry.
+It won't run against a repo with no config entry. Build args, Semgrep configs,
+and the values key can't be inferred by pattern-matching other repos — a
+guessed entry ships a broken pipeline into a real repo.
 
 ## Configuration
 
-[`pipelines/repos.yaml`](../../pipelines/repos.yaml) has two sections.
-`defaults` applies to every repo; `repos` holds one entry each. Any repo may
-override any default.
+[`pipelines/repos.yaml`](../../pipelines/repos.yaml): `defaults` applies to
+every repo, `repos` holds one entry each, any repo can override any default.
 
 ```yaml
 defaults:
   integration_branch: develop
   helm_repo: atkaridarshan04/test-helm-charts
   runner: ubuntu-latest
+  actions_ref: main
 
 repos:
   my-service:
@@ -73,52 +61,54 @@ repos:
 | Field | Required | Meaning |
 |---|---|---|
 | `service_name` | yes | image tag suffix, `component-name`, `component-label` |
-| `service_label` | yes | human label in the Trivy comment header |
+| `service_label` | yes | label in the Trivy comment header |
 | `helm_key` | yes | yq path into the charts repo's values file |
-| `semgrep_configs` | yes | space-separated packs, matched to the repo's stack |
+| `semgrep_configs` | yes | space-separated packs, matched to the stack |
 | `dockerfile_target` | no | `--target` stage; omitted entirely when unset |
-| `build_args` | no | newline-separated `KEY=VALUE`; omitted entirely when unset |
+| `build_args` | no | newline-separated `KEY=VALUE`; omitted when unset |
 
-### Defaults, overridable per repo
+### Defaults
 
 | Field | Default | Drives |
 |---|---|---|
-| `integration_branch` | `develop` | both dev triggers, QA's PR base, and `base-branch` on `promote-candidate-image` |
-| `helm_repo` | — | `helm-repo`, plus the App token's `owner` / `repositories` scoping |
+| `integration_branch` | `develop` | both dev triggers, QA's PR base, `base-branch` on `promote-candidate-image` |
+| `helm_repo` | — | `helm-repo`, plus the App token's `owner`/`repositories` |
 | `runner` | `ubuntu-latest` | `runs-on` for every job |
+| `actions_ref` | `main` | which version of *this* repo pipelines call |
 
-`integration_branch` is deliberately one setting driving four places. They
-must agree: if the pipeline triggers on `main` but `promote-candidate-image`
-looks for PRs against `develop`, every merge fails with "nothing scanned to
-promote."
+`integration_branch` is one setting driving four places **because they must
+agree** — trigger on `main` while `promote-candidate-image` looks for PRs
+against `develop` and every merge fails with "nothing scanned to promote".
+
+`actions_ref` stays `main` until the first release, meaning every commit here
+reaches consumers immediately. Set it to `v1` after releasing — see
+[versioning](../maintaining/versioning.md).
 
 ```yaml
 repos:
   legacy-service:
-    integration_branch: main      # this repo never adopted develop
+    integration_branch: main      # never adopted develop
     runner: self-hosted
+    actions_ref: v1.2.3           # pinned while it stabilises
     service_name: api
-    ...
 ```
 
-## What isn't configurable
+### Not configurable
 
-Deliberately fixed in the templates. Change these by editing
-[`pipelines/templates/`](../../pipelines/templates) directly:
+Fixed in the templates — edit
+[`pipelines/templates/`](../../pipelines/templates) to change them:
 
 | | Why |
 |---|---|
-| Registry (`ghcr.io`) | Changing it means changing the login step, job permissions, and credential — not just a string. A setting here would half-work and fail confusingly. |
-| Release branch pattern (`release-*`) | Convention; changing it is rare enough not to earn permanent API surface. |
-| Values paths (`dev/values.yaml`, `qa/values.yaml`) | Same. |
+| Registry (`ghcr.io`) | Changing registries means changing the login step, permissions, and credential. A string knob would half-work and fail confusingly. |
+| Release pattern (`release-*`) | Convention; too rare to earn permanent API surface. |
+| Values paths (`dev/`, `qa/values.yaml`) | Same. |
 
-## What the repo needs before the pipeline will pass
+## Before the first run
 
-- a `develop` branch (the integration branch both stages assume)
-- a `Dockerfile` the build step can use
-- the Helm-charts repo entry named by `helm_key`, and the App credentials
-  from [`github-app-setup.md`](github-app-setup.md)
+The target repo needs its integration branch and a `Dockerfile`; the charts
+repo needs the key named by `helm_key`; and the App credentials from
+[github-app-setup](github-app-setup.md) must exist.
 
-The scan gates are blocking by default. See
-[`security-scanning.md`](security-scanning.md) before the first PR, so a red
-run isn't a surprise.
+Scan gates block by default — read
+[security-scanning](security-scanning.md) first so a red PR isn't a surprise.
