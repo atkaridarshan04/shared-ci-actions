@@ -1,0 +1,30 @@
+# Per-repo values for scripts/install-pipeline.sh.
+#
+# Only repos with an entry here can have a pipeline installed - the script
+# refuses to run against a repo that isn't listed, rather than guess at its
+# build args or Semgrep configs. Read the target repo's actual Dockerfile and
+# existing CI before adding an entry; a guessed entry ships a broken pipeline
+# into a real repo, not just a bad doc.
+#
+# Fields:
+#   service_name      - used in image tags, component-name, component-label
+#   service_label     - human label in the Trivy comment header, e.g. "api image"
+#   helm_key          - yq path into the deploy values.yaml
+#   semgrep_configs   - space-separated Semgrep config packs, matched to the stack
+#   dockerfile_target - optional --target stage; omit if the Dockerfile has none
+#   build_args        - optional newline-separated KEY=VALUE lines
+
+test-api:
+  service_name: api
+  service_label: api
+  helm_key: .services.api.imageTag
+  semgrep_configs: "p/python p/fastapi p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection"
+  build_args: |
+    APP_ENV=${{ vars.APP_ENV }}
+
+test-web:
+  service_name: web
+  service_label: web
+  helm_key: .services.web.imageTag
+  semgrep_configs: "p/javascript p/typescript p/react p/nextjs p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
+  dockerfile_target: runtime
