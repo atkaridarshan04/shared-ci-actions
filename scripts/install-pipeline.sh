@@ -67,4 +67,4 @@ gh pr create \
   --title "Add $STAGE pipeline (shared composite actions)" \
   --body "Adds \`$TARGET\`, calling the composite actions in $OWNER/shared-ci-actions instead of inline steps.
 
-See shared-ci-actions' \`docs/dev-pipeline.md\` / \`docs/qa-release.md\` for the design rationale."
+See shared-ci-actions' \`docs/using/dev-pipeline.md\` / \`docs/using/qa-release.md\` for the design rationale."

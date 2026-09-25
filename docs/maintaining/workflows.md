@@ -1,8 +1,9 @@
 # Workflows in this repo
 
-These run *here*, on this repo. They are not the pipelines installed into app
-repos — those are [`pipelines/templates/`](../pipelines/templates), documented
-in [`dev-pipeline.md`](dev-pipeline.md) and [`qa-release.md`](qa-release.md).
+Four workflows, all running on this repo. The pipelines installed *into app
+repos* are a different thing entirely — those live in
+[`pipelines/templates/`](../../pipelines/templates) and are documented under
+[`docs/using/`](../using/dev-pipeline.md).
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
@@ -13,27 +14,28 @@ in [`dev-pipeline.md`](dev-pipeline.md) and [`qa-release.md`](qa-release.md).
 
 ## `ci.yml`
 
-Runs [`scripts/verify.sh`](../scripts/verify.sh) — the same command you run
+Runs [`scripts/verify.sh`](../../scripts/verify.sh) — the same command you run
 locally — plus `actionlint`, which catches invalid `${{ }}` expressions and
 bad `needs:` references that a plain YAML parse accepts, and runs shellcheck
 over every `run:` block.
 
 This repo's product *is* YAML and bash, so this is the only thing between a
-typo and a broken pipeline in every consumer repo.
+typo and a broken pipeline in every consumer repo. See
+[`verifying.md`](verifying.md) for what it covers and what it doesn't.
 
 ## `release.yml`
 
 Cuts an immutable `vX.Y.Z` tag and force-moves the `vX` tag to it, so
 consumers can reference `@v1` and receive fixes without receiving breaking
-changes — the scheme `actions/checkout` and friends use.
+changes.
 
 It refuses to reuse an existing version tag, requires a bare `X.Y.Z` (no
 leading `v`, no prerelease suffix), and runs `verify.sh` before tagging so a
 release can't be cut from a broken tree.
 
-> The templates currently reference this repo at `@main`, which means every
-> commit here reaches every consumer immediately. Once you cut `v1`, change
-> the `@main` refs in `pipelines/templates/*.tmpl` to `@v1`.
+> The templates reference this repo at `@main`, so every commit here reaches
+> every consumer immediately. Once you cut `v1`, change those refs in
+> `pipelines/templates/*.tmpl` to `@v1`.
 
 ## `fleet-branch.yml`
 
@@ -82,7 +84,7 @@ Two workflows from the internal setup were dropped rather than genericized.
 
 **`custom-deployment`** cloned app repos, copied `dev-deploy.yaml` to
 `deploy-<env>.yaml`, regex-rewrote the values path and trigger blocks, and
-force-pushed — no PR. [`install-pipeline.sh`](../scripts/install-pipeline.sh)
+force-pushed — no PR. [`install-pipeline.sh`](../../scripts/install-pipeline.sh)
 already does that job properly: it renders from a template, validates the
 result parses, and opens a PR. Keeping both would mean maintaining the worse
 one.

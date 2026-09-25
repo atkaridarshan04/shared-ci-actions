@@ -12,9 +12,11 @@ shared-ci-actions/
 ├── .github/
 │   ├── actions/      composite actions — the dev/QA building blocks
 │   └── workflows/    CI for this repo, plus fleet/release automations
-├── docs/             pipeline design rationale + setup guides
+├── docs/
+│   ├── using/        adopting these pipelines in an app repo
+│   └── maintaining/  changing this repo
 ├── pipelines/        templates + per-repo config for each app repo's pipeline
-├── scripts/          installs a rendered pipeline into one repo, via a PR
+├── scripts/          verify this repo; install a pipeline into another
 ├── CLAUDE.md         editing conventions — read before changing an action
 └── README.md         this file
 ```
@@ -32,17 +34,25 @@ key). Templates are rendered, not copied.
 
 **[`scripts/`](scripts/)** — `verify.sh` runs every check CI runs, with no
 arguments; `install-pipeline.sh` renders a stage template for one repo and
-opens a PR adding it. See [`docs/scripts.md`](docs/scripts.md).
+opens a PR adding it.
 
-**[`docs/`](docs/)** — why the pipelines are shaped this way:
-[`dev-pipeline.md`](docs/dev-pipeline.md) (PR → `develop`, build once /
-promote by digest), [`qa-release.md`](docs/qa-release.md) (release branches,
-and why QA lands through a PR), [`github-app-setup.md`](docs/github-app-setup.md)
-(required one-time setup for the cross-repo charts credential).
+**[`.github/workflows/`](.github/workflows/)** — this repo's own CI, two fleet
+automations (`fleet-branch`, `prod-release`), and a release tagger. These run
+*here*, not in app repos.
 
-**[`.github/workflows/`](.github/workflows/)** — this repo's own CI plus two
-fleet automations (`fleet-branch`, `prod-release`) and a release tagger. These
-run *here*, not in app repos. See [`docs/workflows.md`](docs/workflows.md).
+## Docs
+
+Split by who you are. `using/` is for someone adopting these pipelines in an
+app repo; `maintaining/` is for someone changing this repo.
+
+| | |
+|---|---|
+| [`using/dev-pipeline.md`](docs/using/dev-pipeline.md) | PR → `develop`: build once, promote by digest, tagging scheme, failure modes |
+| [`using/qa-release.md`](docs/using/qa-release.md) | release branches, and why QA lands through a PR |
+| [`using/install-pipeline.md`](docs/using/install-pipeline.md) | installing a stage into a repo, and what that repo needs first |
+| [`using/github-app-setup.md`](docs/using/github-app-setup.md) | required setup for the cross-repo charts credential |
+| [`maintaining/workflows.md`](docs/maintaining/workflows.md) | the workflows that run in *this* repo |
+| [`maintaining/verifying.md`](docs/maintaining/verifying.md) | `verify.sh`, what it covers, and what it doesn't |
 
 ## The two stages
 
@@ -63,7 +73,7 @@ the one thing that does need setup.
 1. Create a Helm-charts repo (`test-helm-charts` in the templates) with a
    `develop` branch and a `dev/values.yaml` holding the key named by your
    entry's `helm_key`.
-2. Follow [`docs/github-app-setup.md`](docs/github-app-setup.md) to create the
+2. Follow [`github-app-setup.md`](docs/using/github-app-setup.md) to create the
    App and set `HELM_BOT_APP_ID` / `HELM_BOT_APP_PRIVATE_KEY` on the app repo.
    Without this the values-update job cannot authenticate.
 3. Add an entry for your app repo to

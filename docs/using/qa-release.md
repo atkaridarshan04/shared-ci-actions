@@ -70,7 +70,7 @@ needs **Pull requests: Read and write** on top of Contents.
 ## Per-repo configuration
 
 Same as dev: one entry per repo in
-[`pipelines/repos.yaml`](../pipelines/repos.yaml), rendered by
+[`pipelines/repos.yaml`](../../pipelines/repos.yaml), rendered by
 `scripts/install-pipeline.sh`. `helm_key` and `service_name` are shared
 across both stages — only the values-file path differs, and that's fixed per
 stage in the templates.

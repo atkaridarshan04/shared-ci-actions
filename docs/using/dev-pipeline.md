@@ -2,9 +2,9 @@
 
 The dev-stage pipeline every app repo runs: PR into `develop` → scan → build
 → merge → promote → deploy. The logic lives **once**, as the composite
-actions in [`.github/actions/`](../.github/actions/README.md); each repo's
+actions in [`.github/actions/`](../../.github/actions/README.md); each repo's
 `dev-pipeline.yml` is a thin caller generated from
-[`pipelines/templates/dev-pipeline.yml.tmpl`](../pipelines/templates/dev-pipeline.yml.tmpl).
+[`pipelines/templates/dev-pipeline.yml.tmpl`](../../pipelines/templates/dev-pipeline.yml.tmpl).
 
 The alternative — one template copy-pasted independently into every repo — is
 what this design exists to avoid. Copies drift: security gates get quietly
@@ -133,7 +133,7 @@ to guard against.
 ## Per-repo configuration
 
 Build args, Semgrep configs, the values-file key, and any Dockerfile target
-live in [`pipelines/repos.yaml`](../pipelines/repos.yaml), one entry per repo.
+live in [`pipelines/repos.yaml`](../../pipelines/repos.yaml), one entry per repo.
 `scripts/install-pipeline.sh` renders the template against that entry — see
-[`scripts.md`](scripts.md). The QA stage is documented in
+[`install-pipeline.md`](install-pipeline.md). The QA stage is documented in
 [`qa-release.md`](qa-release.md).

@@ -10,11 +10,11 @@ wrapping it would buy nothing.
 
 ## See also
 
-- [`docs/dev-pipeline.md`](../../docs/dev-pipeline.md) - full flow, tagging
+- [`docs/using/dev-pipeline.md`](../../docs/using/dev-pipeline.md) - full flow, tagging
   scheme, and failure modes for the PR/`develop` stage
-- [`docs/qa-release.md`](../../docs/qa-release.md) - QA flow, and why it
+- [`docs/using/qa-release.md`](../../docs/using/qa-release.md) - QA flow, and why it
   updates the charts repo through a PR instead of a direct push
-- [`docs/github-app-setup.md`](../../docs/github-app-setup.md) - **required**
+- [`docs/using/github-app-setup.md`](../../docs/using/github-app-setup.md) - **required**
   one-time setup for the cross-repo credential `update-helm-chart` needs
 
 This README is the per-action usage reference (what input goes where); the
@@ -171,7 +171,7 @@ needs a cross-repo token. `GITHUB_TOKEN` can *never* work here: it is scoped
 to the repo whose workflow generated it, by design, no matter what
 `permissions:` you grant. Mint a short-lived App token per run instead -
 one-time setup in
-[`docs/github-app-setup.md`](../../docs/github-app-setup.md).
+[`docs/using/github-app-setup.md`](../../docs/using/github-app-setup.md).
 
 ```yaml
   update-helm-repo:

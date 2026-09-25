@@ -1,33 +1,12 @@
-# Scripts
+# Installing a pipeline into a repo
 
-Two scripts: `verify.sh` checks this repo, `install-pipeline.sh` installs a
-pipeline into an app repo. Everything else is declarative config under
-`pipelines/`.
+`scripts/install-pipeline.sh` renders a stage template against a repo's entry
+in `pipelines/repos.yaml` and opens a PR adding it. One repo and one stage at
+a time — deliberately not a bulk operation.
 
-## `verify.sh` — check this repo
-
-```
-./scripts/verify.sh
-```
-
-No arguments, runnable from anywhere. Exactly what CI runs:
-
-| Check | What it catches |
-|---|---|
-| YAML syntax | malformed action or workflow files |
-| Template render | a template that no longer renders or parses |
-| Placeholder leak | `{{NAME}}` surviving into output — valid YAML, fails at runtime |
-| SHA pins | a third-party `uses:` on a floating tag, or missing its version comment |
-| shellcheck | script bugs, when shellcheck is installed |
-
-Run it before every push. If you add a check, confirm it fails on bad input
-first — a check that can't go red reads as coverage that isn't there.
-
-## `install-pipeline.sh` — install a pipeline into a repo
-
-Prerequisites: `PyYAML` (`pip install pyyaml`) for both scripts, and
-`gh auth login` under an account with push access to the target repo for
-`install-pipeline.sh` — it runs as you, there is no stored credential.
+Prerequisites: `PyYAML` (`pip install pyyaml`), and `gh auth login` under an
+account with push access to the target repo. The script runs as you; there is
+no stored credential.
 
 ```
 scripts/install-pipeline.sh <repo-name> <dev|qa> [--force]
@@ -71,7 +50,7 @@ repo's Dockerfile and existing CI, then add the entry.
 
 ## Adding a repo
 
-See the header comment in [`pipelines/repos.yaml`](../pipelines/repos.yaml)
+See the header comment in [`pipelines/repos.yaml`](../../pipelines/repos.yaml)
 for the field list. Minimum viable entry:
 
 ```yaml
@@ -84,3 +63,10 @@ my-service:
 
 `dockerfile_target` and `build_args` are optional — omit them and the
 corresponding action inputs are left out of the rendered file entirely.
+
+## What the repo needs before the pipeline will pass
+
+- a `develop` branch (the integration branch both stages assume)
+- a `Dockerfile` the build step can use
+- the Helm-charts repo entry named by `helm_key`, and the App credentials
+  from [`github-app-setup.md`](github-app-setup.md)

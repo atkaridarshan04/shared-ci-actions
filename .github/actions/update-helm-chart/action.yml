@@ -10,7 +10,7 @@ description: >
 
   The values file lives in a separate Helm-charts repo, so this always needs
   a cross-repo token - GITHUB_TOKEN is scoped to the calling repo and can
-  never push to another one. See docs/github-app-setup.md.
+  never push to another one. See docs/using/github-app-setup.md.
 inputs:
   yaml-path:
     description: Full yq path to set, e.g. ".services.api.imageTag".
@@ -32,7 +32,7 @@ inputs:
     description: >
       Token with push access to helm-repo. GITHUB_TOKEN can never work here -
       it is scoped to the repo whose workflow generated it. Mint a short-lived
-      one per run from a GitHub App; see docs/github-app-setup.md.
+      one per run from a GitHub App; see docs/using/github-app-setup.md.
     required: true
   mode:
     description: '"direct-commit" (default, push straight to target-branch, re-applying on a race) or "pr" (push to source-branch, open a PR into target-branch).'
