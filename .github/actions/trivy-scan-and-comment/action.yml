@@ -53,6 +53,7 @@ runs:
         TRIVY_LABEL: ${{ inputs.label }}
         TRIVY_ARTIFACT_NAME: ${{ inputs.artifact-name }}
       run: |
+        set -euo pipefail
         python3 <<'PY'
         import os, re
         from pathlib import Path

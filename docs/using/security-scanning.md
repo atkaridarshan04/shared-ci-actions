@@ -2,10 +2,16 @@
 
 Two gates run on every PR into `develop`. Both **fail the build** by default.
 
-| Gate | Scans | Threshold | Can it be disabled? |
+| Gate | Scans | Blocks on | Can it be disabled? |
 |---|---|---|---|
-| Semgrep | source code | every finding (`--error`) | **No** — no input exposes it |
+| Semgrep | source code | `ERROR` by default (`fail-on-severity`) | **No** — the input takes severities only, never "off" |
 | Trivy | the built image | `HIGH`/`CRITICAL`, fixable only | Yes — `fail-on-findings: false` |
+
+Semgrep's threshold is tunable but the gate itself isn't removable: `fail-on-severity`
+accepts `ERROR`, `WARNING`, or `INFO` and nothing else. Findings below the
+threshold are still scanned, reported, and commented — they just don't gate
+the merge. Semgrep is also pinned to a fixed release, so a new Semgrep version
+can't start failing your builds without someone here bumping it deliberately.
 
 Both post a sticky PR comment that updates in place, and upload the full
 report as an artifact (`semgrep-report`, `trivy-reports`). Comments truncate
@@ -47,7 +53,8 @@ CVE-2024-12345
 them. The date and reason are what make cleanup possible later.
 
 **4. Turn the gate off** — `fail-on-findings: "false"` makes Trivy
-report-only for the whole job.
+report-only for the whole job. Semgrep has no equivalent; the closest is
+raising `fail-on-severity`, which still blocks at the level you name.
 
 ## Policy
 

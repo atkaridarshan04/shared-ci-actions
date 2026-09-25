@@ -58,6 +58,16 @@ have logged in before pushing. The templates target GHCR
             p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection
 ```
 
+| Input | Default | Notes |
+|---|---|---|
+| `semgrep-configs` | — | required; match the repo's stack |
+| `semgrep-version` | `1.178.0` | pinned on purpose — an unpinned install lets a new Semgrep release fail builds that passed yesterday |
+| `fail-on-severity` | `ERROR` | `ERROR`, `WARNING`, or `INFO`. Lower findings are reported, not blocking. No value disables the gate. |
+| `pr-number` | auto | only needed on non-`pull_request` events |
+
+The severity gate runs *after* the report upload and PR comment, so a failing
+build still leaves the reviewer the full report.
+
 ## trivy-scan-and-comment
 
 ```yaml

@@ -4,6 +4,21 @@ inputs:
   semgrep-configs:
     description: Space-separated Semgrep config packs, e.g. "p/python p/fastapi p/dockerfile".
     required: true
+  semgrep-version:
+    description: >
+      Semgrep release to install. Pinned by default: an unpinned install
+      means a new Semgrep release can start failing builds that passed
+      yesterday, with no change on the caller's side and no way to roll back.
+    required: false
+    default: "1.178.0"
+  fail-on-severity:
+    description: >
+      Lowest finding severity that fails the build - ERROR (default), WARNING,
+      or INFO. Findings below it are still scanned, reported, and commented,
+      they just don't gate the merge. There is deliberately no value that
+      disables the gate entirely.
+    required: false
+    default: ERROR
   pr-number:
     description: >
       PR number to comment on for non-pull_request events (e.g. resolved via
@@ -22,25 +37,42 @@ runs:
 
     - name: Install Semgrep
       shell: bash
+      env:
+        SEMGREP_VERSION: ${{ inputs.semgrep-version }}
       run: |
+        set -euo pipefail
         python -m pip install --upgrade pip
-        pip install semgrep
+        pip install "semgrep==${SEMGREP_VERSION}"
 
+    # no --error here: the severity gate runs as the last step, so the report
+    # and PR comment are always produced before anything fails the job
     - name: Run Semgrep scan
       shell: bash
       env:
         SEMGREP_CONFIGS: ${{ inputs.semgrep-configs }}
+        FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
       run: |
+        set -euo pipefail
+
+        case "$FAIL_ON_SEVERITY" in
+          ERROR|WARNING|INFO) ;;
+          *)
+            echo "::error::fail-on-severity must be ERROR, WARNING, or INFO (got '$FAIL_ON_SEVERITY')"
+            exit 1
+            ;;
+        esac
+
         CONFIG_ARGS=()
         for c in $SEMGREP_CONFIGS; do
           CONFIG_ARGS+=(--config "$c")
         done
-        semgrep scan "${CONFIG_ARGS[@]}" --error --json --output semgrep-report.json .
+        semgrep scan "${CONFIG_ARGS[@]}" --json --output semgrep-report.json .
 
     - name: Format Semgrep report (human readable)
       if: always()
       shell: bash
       run: |
+        set -euo pipefail
         python <<'PY'
         import json, textwrap
         from pathlib import Path
@@ -158,3 +190,50 @@ runs:
         header: semgrep-scan
         path: semgrep-comment.md
         number_force: ${{ inputs.pr-number }}
+
+    # last, and deliberately not `if: always()` - by this point the report is
+    # uploaded and the PR comment posted, so failing here still leaves the
+    # reviewer everything they need to see why
+    - name: Enforce severity gate
+      shell: bash
+      env:
+        FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+      run: |
+        set -euo pipefail
+        python3 <<'PY'
+        import json, os, sys
+        from pathlib import Path
+
+        # lowest severity first; failing at index i fails everything above it
+        ORDER = ["INFO", "WARNING", "ERROR"]
+        threshold = os.environ["FAIL_ON_SEVERITY"]
+
+        src = Path("semgrep-report.json")
+        if not src.exists():
+            print("::error::semgrep-report.json missing - the scan did not complete")
+            sys.exit(1)
+
+        results = json.loads(src.read_text()).get("results", [])
+        cutoff = ORDER.index(threshold)
+
+        blocking, below = [], 0
+        for r in results:
+            sev = (r.get("extra", {}).get("severity") or "INFO").upper()
+            # an unrecognised severity is treated as blocking rather than ignored
+            if sev not in ORDER or ORDER.index(sev) >= cutoff:
+                blocking.append((sev, r.get("check_id", "?"), r.get("path", "?")))
+            else:
+                below += 1
+
+        if below:
+            print(f"{below} finding(s) below {threshold} - reported, not blocking.")
+
+        if not blocking:
+            print(f"No findings at or above {threshold}.")
+            sys.exit(0)
+
+        print(f"::error::{len(blocking)} finding(s) at or above {threshold}:")
+        for sev, rule, path in blocking:
+            print(f"  {sev}  {path}  {rule}")
+        sys.exit(1)
+        PY

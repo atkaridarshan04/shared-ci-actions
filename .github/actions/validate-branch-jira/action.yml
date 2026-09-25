@@ -33,6 +33,7 @@ runs:
         BRANCH: ${{ inputs.branch }}
         BRANCH_PATTERN: ${{ inputs.branch-pattern }}
       run: |
+        set -euo pipefail
         echo "Branch name: $BRANCH"
 
         if [[ "$BRANCH" =~ $BRANCH_PATTERN ]]; then
@@ -52,6 +53,7 @@ runs:
         JIRA_DOMAIN: ${{ inputs.jira-domain }}
         TICKET_KEY: ${{ steps.branch.outputs.ticket-key }}
       run: |
+        set -euo pipefail
         STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
           -u "$JIRA_USER:$JIRA_TOKEN" \
           "https://$JIRA_DOMAIN/rest/api/3/issue/$TICKET_KEY")
