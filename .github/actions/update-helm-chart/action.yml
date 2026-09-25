@@ -1,0 +1,222 @@
+name: Update Helm chart image tag
+description: >
+  Set one imageTag in a Helm values file and push. In "direct-commit" mode
+  (default) this pushes straight to target-branch, re-applying onto the
+  latest remote state if the push races another run. In "pr" mode it checks
+  out source-branch, pushes there, and opens (or reuses) a PR into
+  target-branch instead - for release flows where the environment's values
+  file lives on a branch of its own and the change should go through review
+  before landing on target-branch.
+
+  The values file lives in a separate Helm-charts repo, so this always needs
+  a cross-repo token - GITHUB_TOKEN is scoped to the calling repo and can
+  never push to another one. See docs/github-app-setup.md.
+inputs:
+  yaml-path:
+    description: Full yq path to set, e.g. ".services.api.imageTag".
+    required: true
+  values-file:
+    description: Path to the values file to update, relative to the helm-repo root.
+    required: false
+    default: dev/values.yaml
+  image-tag:
+    description: The image tag value to set.
+    required: true
+  component-label:
+    description: Label used in commit messages / PR title, e.g. "api".
+    required: true
+  helm-repo:
+    description: Helm-charts repo holding the values file, as "owner/name".
+    required: true
+  helm-repo-token:
+    description: >
+      Token with push access to helm-repo. GITHUB_TOKEN can never work here -
+      it is scoped to the repo whose workflow generated it. Mint a short-lived
+      one per run from a GitHub App; see docs/github-app-setup.md.
+    required: true
+  mode:
+    description: '"direct-commit" (default, push straight to target-branch, re-applying on a race) or "pr" (push to source-branch, open a PR into target-branch).'
+    required: false
+    default: direct-commit
+  target-branch:
+    description: Branch to push to directly (direct-commit mode) or the PR base branch (pr mode).
+    required: false
+    default: develop
+  source-branch:
+    description: Branch to check out, commit to, and push in "pr" mode - required when mode is "pr" (e.g. the release branch triggering the run).
+    required: false
+    default: ""
+  yq-version:
+    description: yq release to install when the runner doesn't already have it.
+    required: false
+    default: v4.53.6
+outputs:
+  pr-number:
+    description: The opened/reused PR number, set only in "pr" mode.
+    value: ${{ steps.pr.outputs.number }}
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        SOURCE_BRANCH: ${{ inputs.source-branch }}
+      run: |
+        set -euo pipefail
+        case "$MODE" in
+          direct-commit) ;;
+          pr)
+            if [ -z "$SOURCE_BRANCH" ]; then
+              echo "mode: pr requires source-branch to be set." >&2
+              exit 1
+            fi
+            ;;
+          *)
+            echo "mode must be 'direct-commit' or 'pr', got '$MODE'." >&2
+            exit 1
+            ;;
+        esac
+
+    - name: Checkout Helm values repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ inputs.helm-repo }}
+        ref: ${{ inputs.mode == 'pr' && inputs.source-branch || inputs.target-branch }}
+        token: ${{ inputs.helm-repo-token }}
+        path: .
+
+    - name: Install yq
+      shell: bash
+      env:
+        YQ_VERSION: ${{ inputs.yq-version }}
+      run: |
+        set -euo pipefail
+        if command -v yq >/dev/null 2>&1; then
+          echo "yq already present: $(yq --version)"
+          exit 0
+        fi
+        sudo curl -fsSL \
+          "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+          -o /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Update image tag
+      shell: bash
+      env:
+        YAML_PATH: ${{ inputs.yaml-path }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        VALUES_FILE: ${{ inputs.values-file }}
+      run: |
+        set -euo pipefail
+        if [ ! -f "$VALUES_FILE" ]; then
+          echo "Values file not found: $VALUES_FILE" >&2
+          exit 1
+        fi
+        yq eval "${YAML_PATH} = strenv(IMAGE_TAG)" -i "$VALUES_FILE"
+        echo "Set ${YAML_PATH} to ${IMAGE_TAG} in ${VALUES_FILE}"
+
+    # every app repo's dev pipeline pushes to this same branch of the shared
+    # charts repo, so two merges landing close together will race on a
+    # non-fast-forward push. Re-applying the edit onto the latest remote state
+    # (rather than rebasing the commit) can't hit a merge conflict - the edit
+    # is idempotent and touches exactly one key.
+    - name: Commit and push updated values file (direct-commit mode)
+      if: inputs.mode != 'pr'
+      shell: bash
+      env:
+        YAML_PATH: ${{ inputs.yaml-path }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        COMPONENT_LABEL: ${{ inputs.component-label }}
+        VALUES_FILE: ${{ inputs.values-file }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
+        ACTOR: ${{ github.actor }}
+      run: |
+        set -uo pipefail
+        git config user.name "$ACTOR"
+        git config user.email "${ACTOR}@users.noreply.github.com"
+
+        for attempt in 1 2 3 4 5; do
+          git add "$VALUES_FILE"
+          git commit -m "Update ${COMPONENT_LABEL} imageTag to ${IMAGE_TAG}" || echo "No changes to commit"
+
+          if git push origin "HEAD:${TARGET_BRANCH}"; then
+            echo "Pushed to ${TARGET_BRANCH} on attempt ${attempt}."
+            exit 0
+          fi
+
+          echo "Push rejected (attempt ${attempt}/5), re-applying onto latest ${TARGET_BRANCH}..."
+          git fetch origin "$TARGET_BRANCH"
+          git reset --hard "origin/${TARGET_BRANCH}"
+          yq eval "${YAML_PATH} = strenv(IMAGE_TAG)" -i "$VALUES_FILE"
+          sleep $((RANDOM % 5 + 1))
+        done
+
+        echo "Failed to push to ${TARGET_BRANCH} after 5 attempts." >&2
+        exit 1
+
+    # release branches aren't shared across concurrent pipelines the way the
+    # integration branch is, so a single push (no retry) is enough here
+    - name: Commit and push updated values file (pr mode)
+      if: inputs.mode == 'pr'
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        COMPONENT_LABEL: ${{ inputs.component-label }}
+        VALUES_FILE: ${{ inputs.values-file }}
+        SOURCE_BRANCH: ${{ inputs.source-branch }}
+        ACTOR: ${{ github.actor }}
+      run: |
+        set -euo pipefail
+        git config user.name "$ACTOR"
+        git config user.email "${ACTOR}@users.noreply.github.com"
+        git add "$VALUES_FILE"
+        git commit -m "Update ${COMPONENT_LABEL} imageTag to ${IMAGE_TAG}" || echo "No changes to commit"
+        git push origin "HEAD:${SOURCE_BRANCH}"
+
+    - name: Open or reuse PR to target branch (pr mode)
+      if: inputs.mode == 'pr'
+      id: pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.helm-repo-token }}
+        HELM_REPO: ${{ inputs.helm-repo }}
+        SOURCE_BRANCH: ${{ inputs.source-branch }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        COMPONENT_LABEL: ${{ inputs.component-label }}
+      run: |
+        set -euo pipefail
+        OWNER="${HELM_REPO%%/*}"
+
+        EXISTING=$(curl -fsSL \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${HELM_REPO}/pulls?state=open&head=${OWNER}:${SOURCE_BRANCH}&base=${TARGET_BRANCH}" \
+        | python3 -c "import json, sys; p = json.load(sys.stdin); print(p[0]['number'] if p else '')")
+
+        if [ -n "$EXISTING" ]; then
+          echo "PR already exists: #$EXISTING"
+          echo "number=$EXISTING" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        BODY_FILE="$RUNNER_TEMP/pr-body.json"
+        python3 - <<'PY' > "$BODY_FILE"
+        import json, os
+        print(json.dumps({
+            "title": f"Update Helm values: {os.environ['COMPONENT_LABEL']} -> {os.environ['SOURCE_BRANCH']}",
+            "head": os.environ["SOURCE_BRANCH"],
+            "base": os.environ["TARGET_BRANCH"],
+            "body": f"Auto PR: update {os.environ['COMPONENT_LABEL']} imageTag to {os.environ['IMAGE_TAG']}",
+        }))
+        PY
+
+        NUMBER=$(curl -fsSL -X POST \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${HELM_REPO}/pulls" \
+          --data @"$BODY_FILE" \
+        | python3 -c "import json, sys; print(json.load(sys.stdin)['number'])")
+        echo "Opened PR #$NUMBER: ${SOURCE_BRANCH} -> ${TARGET_BRANCH} in ${HELM_REPO}"
+        echo "number=$NUMBER" >> "$GITHUB_OUTPUT"

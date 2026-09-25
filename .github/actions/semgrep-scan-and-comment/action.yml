@@ -1,0 +1,160 @@
+name: Semgrep scan and PR comment
+description: Run Semgrep, upload the report, and post/update a PR comment with the results.
+inputs:
+  semgrep-configs:
+    description: Space-separated Semgrep config packs, e.g. "p/python p/fastapi p/dockerfile".
+    required: true
+  pr-number:
+    description: >
+      PR number to comment on for non-pull_request events (e.g. resolved via
+      resolve-pr-for-branch on a release run). Leave unset on pull_request
+      events - the PR is auto-detected. If unset and the event isn't a
+      pull_request, the comment step is skipped (report is still uploaded).
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: "3.13"
+
+    - name: Install Semgrep
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install semgrep
+
+    - name: Run Semgrep scan
+      shell: bash
+      env:
+        SEMGREP_CONFIGS: ${{ inputs.semgrep-configs }}
+      run: |
+        CONFIG_ARGS=()
+        for c in $SEMGREP_CONFIGS; do
+          CONFIG_ARGS+=(--config "$c")
+        done
+        semgrep scan "${CONFIG_ARGS[@]}" --error --json --output semgrep-report.json .
+
+    - name: Format Semgrep report (human readable)
+      if: always()
+      shell: bash
+      run: |
+        python <<'PY'
+        import json, textwrap
+        from pathlib import Path
+        from datetime import datetime, timezone
+
+        src = Path("semgrep-report.json")
+        out = Path("semgrep-report.txt")
+        SEP  = "=" * 70
+        DASH = "-" * 70
+
+        if not src.exists():
+            out.write_text("Semgrep JSON report was not generated.\n")
+            Path("semgrep-comment.md").write_text(
+                "### Semgrep Scan Results\n\nSemgrep JSON report was not generated.\n"
+            )
+            raise SystemExit(0)
+
+        data    = json.loads(src.read_text())
+        results = data.get("results", [])
+        errors  = data.get("errors",  [])
+
+        ORDER = ["ERROR", "CRITICAL", "HIGH", "MEDIUM", "WARNING", "LOW", "INFO"]
+        counts = {s: 0 for s in ORDER}
+        for r in results:
+            sev = (r.get("extra", {}).get("severity") or "INFO").upper()
+            counts[sev] = counts.get(sev, 0) + 1
+
+        header = [
+            SEP,
+            "  SEMGREP SECURITY SCAN REPORT",
+            f"  Generated : {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"  Findings  : {len(results)}  |  Errors: {len(errors)}",
+            SEP,
+            "",
+            "SEVERITY SUMMARY",
+            DASH,
+        ]
+        for sev in ORDER:
+            if counts[sev]:
+                header.append(f"  {sev:<10} {counts[sev]}")
+        if not any(counts.values()):
+            header.append("  No findings detected.")
+        header += ["", SEP, "", ""]
+
+        body = []
+        for i, r in enumerate(results, 1):
+            sev     = (r.get("extra", {}).get("severity") or "INFO").upper()
+            rule    = r.get("check_id", "")
+            path    = r.get("path", "")
+            start   = r.get("start", {}).get("line", "?")
+            end     = r.get("end",   {}).get("line", "?")
+            message = r.get("extra", {}).get("message", "").strip()
+            link    = r.get("extra", {}).get("metadata", {}).get("shortlink", "")
+            cwe     = r.get("extra", {}).get("metadata", {}).get("cwe", "")
+            owasp   = r.get("extra", {}).get("metadata", {}).get("owasp", "")
+
+            block = [
+                f"[{i}/{len(results)}]  {sev}",
+                DASH,
+                f"  Rule    : {rule}",
+                f"  File    : {path}",
+                f"  Lines   : {start} - {end}",
+            ]
+            if cwe:
+                cwe_str = ", ".join(cwe) if isinstance(cwe, list) else cwe
+                block.append(f"  CWE     : {cwe_str}")
+            if owasp:
+                owasp_str = ", ".join(owasp) if isinstance(owasp, list) else owasp
+                block.append(f"  OWASP   : {owasp_str}")
+            if link:
+                block.append(f"  Details : {link}")
+            block.append("")
+            wrapped = textwrap.fill(message, width=66, initial_indent="  Message : ", subsequent_indent="             ")
+            block.append(wrapped)
+            block += ["", DASH, ""]
+            body.extend(block)
+
+        out.write_text("\n".join(header + body) + "\n")
+
+        MAX_CHARS = 60000
+        full_report = "\n".join(header + body)
+        truncated = len(full_report) > MAX_CHARS
+        if truncated:
+            full_report = full_report[:MAX_CHARS]
+
+        comment = ["### Semgrep Scan Results", ""]
+        comment.append(f"**Findings:** {len(results)}  |  **Errors:** {len(errors)}")
+        comment.append("")
+        for sev in ORDER:
+            if counts[sev]:
+                comment.append(f"- **{sev}**: {counts[sev]}")
+        if not any(counts.values()):
+            comment.append("No findings detected.")
+        comment += ["", "<details><summary>Full report</summary>", "", "```", full_report, "```", "</details>"]
+        if truncated:
+            comment += ["", "_Report truncated — see the `semgrep-report` workflow artifact for full output._"]
+
+        Path("semgrep-comment.md").write_text("\n".join(comment) + "\n")
+        PY
+
+    - name: Upload Semgrep report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: semgrep-report
+        path: |
+          semgrep-report.txt
+          semgrep-report.json
+        if-no-files-found: warn
+
+    - name: Comment Semgrep results on PR
+      if: always() && (github.event_name == 'pull_request' || inputs.pr-number != '')
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      with:
+        header: semgrep-scan
+        path: semgrep-comment.md
+        number_force: ${{ inputs.pr-number }}

@@ -1,0 +1,68 @@
+name: Promote scanned candidate image
+description: >
+  Promote a PR's already-scanned candidate image to a release tag by digest,
+  with no rebuild. Registry-agnostic - it only needs the caller to have
+  logged in already. Run on a push to the integration branch.
+inputs:
+  component-name:
+    description: Tag suffix matching the PR job's candidate tag, e.g. "api", "web".
+    required: true
+  image-repository:
+    description: Registry + repository, no tag (e.g. "ghcr.io/owner/repo").
+    required: true
+  base-branch:
+    description: Integration branch the merged PR targeted - used to pick the right PR when a commit is associated with several.
+    required: false
+    default: develop
+outputs:
+  release-tag:
+    description: The promoted release tag (<sha>-<component-name>).
+    value: ${{ steps.release.outputs.tag }}
+runs:
+  using: composite
+  steps:
+    # squash/rebase merges break walking the merge commit back to the PR
+    # branch tip, so resolve via GitHub's commit<->PR association instead
+    - name: Resolve merged PR number
+      id: pr
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.sha }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+      run: |
+        set -euo pipefail
+        NUMBER=$(curl -fsSL \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${REPOSITORY}/commits/${COMMIT_SHA}/pulls" \
+        | python3 -c "
+        import json, os, sys
+        base = os.environ['BASE_BRANCH']
+        pulls = json.load(sys.stdin)
+        candidates = sorted(p['number'] for p in pulls if p.get('base', {}).get('ref') == base)
+        if not candidates:
+            sys.exit(1)
+        print(candidates[-1])
+        ")
+        echo "Resolved PR #$NUMBER for $COMMIT_SHA"
+        echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+
+    - name: Promote scanned candidate image (no rebuild)
+      id: release
+      shell: bash
+      env:
+        IMAGE_REPOSITORY: ${{ inputs.image-repository }}
+        COMPONENT_NAME: ${{ inputs.component-name }}
+        PR_NUMBER: ${{ steps.pr.outputs.number }}
+        COMMIT_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        CANDIDATE_TAG="pr-${PR_NUMBER}-${COMPONENT_NAME}"
+        RELEASE_TAG="${COMMIT_SHA}-${COMPONENT_NAME}"
+        docker buildx imagetools create \
+          --tag "${IMAGE_REPOSITORY}:${RELEASE_TAG}" \
+          "${IMAGE_REPOSITORY}:${CANDIDATE_TAG}"
+        echo "Promoted $CANDIDATE_TAG -> $RELEASE_TAG (same digest, no rebuild)"
+        echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"

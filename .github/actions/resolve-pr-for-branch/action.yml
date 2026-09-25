@@ -1,0 +1,38 @@
+name: Resolve open PR for branch
+description: >
+  Find the number of an open PR whose head is the given branch, so scan
+  actions triggered by a non-pull_request event (e.g. a QA release push) can
+  still comment on it. Outputs an empty string, not an error, if no open PR
+  exists for the branch yet.
+inputs:
+  branch:
+    description: Branch to look up, e.g. github.ref_name.
+    required: true
+outputs:
+  pr-number:
+    description: The open PR number for this branch, or empty if none exists.
+    value: ${{ steps.resolve.outputs.number }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve open PR for branch
+      id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        OWNER: ${{ github.repository_owner }}
+        BRANCH: ${{ inputs.branch }}
+      run: |
+        set -euo pipefail
+        NUMBER=$(curl -fsSL \
+          -H "Authorization: Bearer $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${REPOSITORY}/pulls?state=open&head=${OWNER}:${BRANCH}" \
+        | python3 -c "
+        import json, sys
+        pulls = json.load(sys.stdin)
+        print(pulls[0]['number'] if pulls else '')
+        ")
+        echo "Resolved PR for branch '$BRANCH': ${NUMBER:-none found}"
+        echo "number=$NUMBER" >> "$GITHUB_OUTPUT"

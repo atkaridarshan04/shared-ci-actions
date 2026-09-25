@@ -1,0 +1,64 @@
+name: Validate branch name and Jira ticket
+description: >
+  Check that a PR's branch name starts with a Jira ticket key
+  (<TICKET-KEY>-description) and that ticket actually exists in Jira. Opt-in:
+  no template wires this in, so turning ticket gating on for a repo means
+  adding one job rather than un-commenting ~30 lines of inline steps.
+inputs:
+  branch:
+    description: Branch name to validate, e.g. github.head_ref.
+    required: true
+  branch-pattern:
+    description: >
+      Bash extended regex the branch name must match, with one capture group
+      for the ticket key. Default expects "PROJ-123-description".
+    required: false
+    default: '^([A-Z]+-[0-9]+)-.*'
+  jira-domain:
+    description: Jira domain, e.g. "yourteam.atlassian.net" (secrets.JIRA_DOMAIN).
+    required: true
+  jira-user:
+    description: Jira account email for basic auth (secrets.JIRA_USER).
+    required: true
+  jira-token:
+    description: Jira API token for basic auth (secrets.JIRA_API_TOKEN).
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate branch name format
+      id: branch
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        BRANCH_PATTERN: ${{ inputs.branch-pattern }}
+      run: |
+        echo "Branch name: $BRANCH"
+
+        if [[ "$BRANCH" =~ $BRANCH_PATTERN ]]; then
+          TICKET_KEY="${BASH_REMATCH[1]}"
+        else
+          echo "Branch name must match pattern: $BRANCH_PATTERN (e.g. PROJ-123-fix-bug)"
+          exit 1
+        fi
+
+        echo "ticket-key=$TICKET_KEY" >> "$GITHUB_OUTPUT"
+
+    - name: Verify Jira ticket exists
+      shell: bash
+      env:
+        JIRA_USER: ${{ inputs.jira-user }}
+        JIRA_TOKEN: ${{ inputs.jira-token }}
+        JIRA_DOMAIN: ${{ inputs.jira-domain }}
+        TICKET_KEY: ${{ steps.branch.outputs.ticket-key }}
+      run: |
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          -u "$JIRA_USER:$JIRA_TOKEN" \
+          "https://$JIRA_DOMAIN/rest/api/3/issue/$TICKET_KEY")
+
+        if [[ "$STATUS" != "200" ]]; then
+          echo "Jira ticket $TICKET_KEY does not exist or is not accessible (HTTP $STATUS)"
+          exit 1
+        fi
+
+        echo "Jira ticket $TICKET_KEY verified"

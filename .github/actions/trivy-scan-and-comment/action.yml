@@ -1,0 +1,109 @@
+name: Trivy scan and PR comment
+description: Scan an image with Trivy (HIGH/CRITICAL, fixed-only), upload the report, and post/update a PR comment.
+inputs:
+  image-ref:
+    description: Image to scan (registry/repository:tag).
+    required: true
+  label:
+    description: Label for the comment header, e.g. "frontend image".
+    required: true
+  artifact-name:
+    description: Name of the uploaded report artifact.
+    required: false
+    default: trivy-reports
+  fail-on-findings:
+    description: Set to "false" for report-only, no hard enforcement.
+    required: false
+    default: "true"
+  pr-number:
+    description: >
+      PR number to comment on for non-pull_request events (e.g. resolved via
+      resolve-pr-for-branch on a release run). Leave unset on pull_request
+      events - the PR is auto-detected. If unset and the event isn't a
+      pull_request, the comment step is skipped (report is still uploaded).
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        format: "table"
+        output: trivy-report.txt
+        severity: "HIGH,CRITICAL"
+        # unfixed CVEs are in the base image; no dependency bump here helps
+        ignore-unfixed: true
+        exit-code: ${{ inputs.fail-on-findings == 'true' && '1' || '0' }}
+
+    - name: Upload Trivy report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: trivy-report.txt
+        if-no-files-found: warn
+
+    - name: Prepare Trivy PR comment
+      if: always()
+      shell: bash
+      env:
+        TRIVY_REPORT_FILE: trivy-report.txt
+        TRIVY_LABEL: ${{ inputs.label }}
+        TRIVY_ARTIFACT_NAME: ${{ inputs.artifact-name }}
+      run: |
+        python3 <<'PY'
+        import os, re
+        from pathlib import Path
+
+        MAX_CHARS = 60000
+        src = Path(os.environ["TRIVY_REPORT_FILE"])
+        label = os.environ["TRIVY_LABEL"]
+        artifact_name = os.environ["TRIVY_ARTIFACT_NAME"]
+        lines = [f"### Trivy Scan Results ({label})", ""]
+
+        if src.exists():
+            report = src.read_text(errors="replace")
+            # skip Trivy's "Report Summary" overview table (mostly zero-vuln
+            # noise); the real per-vulnerability tables start at "Total: N (...)"
+            m = re.search(r"^([^\n]+)\n=+\n", report, re.MULTILINE)
+            detail = report[m.start():].strip("\n") if m else ""
+
+            if detail:
+                totals = {}
+                for tm in re.finditer(r"Total:\s*(\d+)\s*\(([^)]*)\)", detail):
+                    for pair in tm.group(2).split(","):
+                        pair = pair.strip()
+                        if not pair:
+                            continue
+                        sev, count = pair.split(":")
+                        totals[sev.strip()] = totals.get(sev.strip(), 0) + int(count.strip())
+
+                lines.append(f"**Total vulnerabilities:** {sum(totals.values())}")
+                for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"):
+                    if totals.get(sev):
+                        lines.append(f"- **{sev}**: {totals[sev]}")
+                lines.append("")
+
+                truncated = len(detail) > MAX_CHARS
+                if truncated:
+                    detail = detail[:MAX_CHARS]
+                lines += ["<details><summary>Full report</summary>", "", "```", detail, "```", "</details>"]
+                if truncated:
+                    lines += ["", f"_Report truncated — see the `{artifact_name}` workflow artifact for full output._"]
+            else:
+                lines.append("No HIGH/CRITICAL vulnerabilities detected.")
+        else:
+            lines.append("Trivy report was not generated.")
+
+        Path("trivy-comment.md").write_text("\n".join(lines) + "\n")
+        PY
+
+    - name: Comment Trivy results on PR
+      if: always() && (github.event_name == 'pull_request' || inputs.pr-number != '')
+      uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      with:
+        header: trivy-scan
+        path: trivy-comment.md
+        number_force: ${{ inputs.pr-number }}
