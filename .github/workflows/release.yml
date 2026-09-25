@@ -1,0 +1,77 @@
+name: Release - tag a version
+
+# Consumer repos reference these actions by ref. Referencing @main means every
+# commit here instantly changes every consumer's pipeline, with no way to pin
+# or roll back. This cuts an immutable vX.Y.Z tag and moves the vX tag to it,
+# so consumers can track @v1 and get fixes without getting breaking changes -
+# the same scheme actions/checkout and friends use.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Tag v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version must be X.Y.Z without a leading v, got '$VERSION'"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "::error::tag v${VERSION} already exists - releases are immutable"
+            exit 1
+          fi
+
+      - name: Verify the tree passes its own checks
+        run: |
+          set -euo pipefail
+          pip install pyyaml --quiet
+          ./scripts/verify.sh
+
+      - name: Create version tag and move the major tag
+        env:
+          VERSION: ${{ inputs.version }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          MAJOR="v${VERSION%%.*}"
+
+          git config user.name "$ACTOR"
+          git config user.email "${ACTOR}@users.noreply.github.com"
+
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+
+          # the major tag is deliberately mutable - that is what makes @v1 track
+          # patches. -f is required and correct here, unlike on the version tag.
+          git tag -f -a "$MAJOR" -m "Track v${VERSION}"
+          git push -f origin "$MAJOR"
+
+          {
+            echo "### Released \`v${VERSION}\`"
+            echo ""
+            echo "- Immutable tag: \`v${VERSION}\`"
+            echo "- Moving major tag \`${MAJOR}\` now points here"
+            echo ""
+            echo "Consumers referencing \`@${MAJOR}\` pick this up on their next run."
+          } >> "$GITHUB_STEP_SUMMARY"
