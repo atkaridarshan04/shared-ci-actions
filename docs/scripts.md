@@ -1,16 +1,33 @@
 # Scripts
 
-`scripts/install-pipeline.sh` installs one pipeline-stage file into one repo,
-by opening a PR on that repo. It is the only script here; everything else is
-declarative config under `pipelines/`.
+Two scripts: `verify.sh` checks this repo, `install-pipeline.sh` installs a
+pipeline into an app repo. Everything else is declarative config under
+`pipelines/`.
 
-## Prerequisites
+## `verify.sh` — check this repo
 
-- `gh auth login`, under an account with push access to the target repo. The
-  script runs as you — there is no stored credential.
-- `PyYAML` (`pip install pyyaml`) for the templating step.
+```
+./scripts/verify.sh
+```
 
-## Usage
+No arguments, runnable from anywhere. Exactly what CI runs:
+
+| Check | What it catches |
+|---|---|
+| YAML syntax | malformed action or workflow files |
+| Template render | a template that no longer renders or parses |
+| Placeholder leak | `{{NAME}}` surviving into output — valid YAML, fails at runtime |
+| SHA pins | a third-party `uses:` on a floating tag, or missing its version comment |
+| shellcheck | script bugs, when shellcheck is installed |
+
+Run it before every push. If you add a check, confirm it fails on bad input
+first — a check that can't go red reads as coverage that isn't there.
+
+## `install-pipeline.sh` — install a pipeline into a repo
+
+Prerequisites: `PyYAML` (`pip install pyyaml`) for both scripts, and
+`gh auth login` under an account with push access to the target repo for
+`install-pipeline.sh` — it runs as you, there is no stored credential.
 
 ```
 scripts/install-pipeline.sh <repo-name> <dev|qa> [--force]

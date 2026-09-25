@@ -42,53 +42,41 @@ editing conventions only.
   when empty. A new block placeholder must be added to that set — otherwise
   it's substituted inline and its indentation is lost.
 
-## Verifying a changed action
+## Verifying a change
 
-There's no CI here that exercises these actions in isolation. Before calling
-a change done:
+Run `./scripts/verify.sh` — it is exactly what CI runs: YAML syntax over
+every action and workflow, every template rendered and parsed with a
+placeholder-leak check, and a SHA-pin check on every third-party `uses:`.
+Install `shellcheck` locally and it lints the scripts too; CI always does.
 
-```
-python3 -c "import yaml; yaml.safe_load(open('PATH/action.yml'))"
-```
+`actionlint` runs in CI on top of that and catches what a YAML parse cannot —
+invalid `${{ }}` expressions, bad `needs:` references, a key used in a context
+that doesn't provide it — plus shellcheck over every `run:` block.
 
-for syntax, then dry-run any new shell+Python logic outside GitHub Actions:
-extract the `run:` string via that same `yaml.safe_load` (this also proves
-what the block-scalar indentation actually collapses to), manually
-substitute any `${{ github.* }}` expressions it references (bash chokes on
-the literal `${{ }}` otherwise — that's a test-harness artifact, not a real
-bug), stub out `curl`/network calls, and execute with `bash`.
+What none of that covers is behaviour. Dry-run any new shell or Python logic
+outside GitHub Actions: extract the `run:` string via `yaml.safe_load` (which
+also proves what the block-scalar indentation actually collapses to), manually
+substitute any `${{ github.* }}` expressions it references (bash chokes on the
+literal `${{ }}` otherwise — a test-harness artifact, not a real bug), stub out
+`curl`/`gh`/network calls, and execute with `bash`.
 
-Watch for empty-array expansion under `set -u`: `"${ARR[@]}"` with `ARR=()`
-is an unbound-variable error on bash < 4.4, which GitHub's ubuntu runners
-aren't but a self-hosted runner may well be. Use `${ARR[@]+"${ARR[@]}"}`.
+When you add a check to `verify.sh`, confirm it fails on bad input before
+trusting it. A check that cannot go red is worse than no check — it reads as
+coverage that isn't there.
 
-## Verifying a changed template
+## Gotchas worth keeping in mind
 
-Render every repo × stage combination and parse each one:
-
-```
-for repo in $(python3 -c "import yaml;print(' '.join(yaml.safe_load(open('pipelines/repos.yaml'))))"); do
-  for stage in dev qa; do
-    python3 scripts/lib/pipeline_lib.py render "$repo" "$stage" \
-      | python3 -c "import sys,yaml; yaml.safe_load(sys.stdin)" \
-      && echo "OK $repo/$stage" || echo "FAIL $repo/$stage"
-  done
-done
-```
-
-Parsing alone doesn't catch a leaked placeholder — `{{SERVICE_NAME}}` is
-valid YAML and fails only at runtime. Check for one in Python, not with
-grep: a bare `{{` also matches GitHub's own `${{ }}` expressions, and some
-greps (ugrep) reject `{{` as a malformed repeat quantifier.
-
-```
-python3 - <<'EOF'
-import re, subprocess, yaml
-pat = re.compile(r'(?<!\$)\{\{[A-Z_]+\}\}')   # not preceded by '$'
-for repo in yaml.safe_load(open('pipelines/repos.yaml')):
-    for stage in ('dev', 'qa'):
-        out = subprocess.run(['python3', 'scripts/lib/pipeline_lib.py', 'render', repo, stage],
-                             capture_output=True, text=True, check=True).stdout
-        print(repo, stage, pat.findall(out) or 'clean')
-EOF
-```
+- **Empty arrays under `set -u`.** `"${ARR[@]}"` with `ARR=()` is an
+  unbound-variable error on bash < 4.4 — which GitHub's ubuntu runners aren't,
+  but a self-hosted runner may well be. Use `${ARR[@]+"${ARR[@]}"}`.
+- **Never interpolate `${{ inputs.* }}` into a `run:` or `script:` body.**
+  It is substituted before the shell ever starts, so a dispatch input can
+  inject commands. Route it through `env:` and reference `"$VAR"`. Every
+  workflow here does this; keep it that way.
+- **Dependabot does not see `pipelines/templates/*.tmpl`.** It updates pins in
+  `.github/workflows/` and composite `action.yml` files only, so template pins
+  must be bumped by hand. `verify.sh` enforces that they stay SHA-pinned, but
+  nothing tells you they've gone stale.
+- **Consumers reference this repo by ref.** Changing an action on `main`
+  changes every consumer immediately. Cut a release (`release.yml`) rather
+  than relying on that.

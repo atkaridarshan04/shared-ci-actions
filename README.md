@@ -11,7 +11,7 @@ digest* on merge. No image is ever rebuilt between "scanned" and "deployed".
 shared-ci-actions/
 ├── .github/
 │   ├── actions/      composite actions — the dev/QA building blocks
-│   └── workflows/    standalone workflow_dispatch admin automations
+│   └── workflows/    CI for this repo, plus fleet/release automations
 ├── docs/             pipeline design rationale + setup guides
 ├── pipelines/        templates + per-repo config for each app repo's pipeline
 ├── scripts/          installs a rendered pipeline into one repo, via a PR
@@ -30,9 +30,9 @@ PR resolution, and an opt-in Jira branch gate. Each README section shows the
 config entry per app repo (service name, Semgrep configs, build args, values
 key). Templates are rendered, not copied.
 
-**[`scripts/install-pipeline.sh`](scripts/install-pipeline.sh)** — renders a
-stage template for one repo and opens a PR adding it. See
-[`docs/scripts.md`](docs/scripts.md).
+**[`scripts/`](scripts/)** — `verify.sh` runs every check CI runs, with no
+arguments; `install-pipeline.sh` renders a stage template for one repo and
+opens a PR adding it. See [`docs/scripts.md`](docs/scripts.md).
 
 **[`docs/`](docs/)** — why the pipelines are shaped this way:
 [`dev-pipeline.md`](docs/dev-pipeline.md) (PR → `develop`, build once /
@@ -40,11 +40,9 @@ promote by digest), [`qa-release.md`](docs/qa-release.md) (release branches,
 and why QA lands through a PR), [`github-app-setup.md`](docs/github-app-setup.md)
 (required one-time setup for the cross-repo charts credential).
 
-**[`.github/workflows/`](.github/workflows/)** — a separate set of
-`workflow_dispatch` admin scripts (environment scaffolding, release-branch
-cutting, prod tag bumps) that clone and edit *other* repos. Not reusable
-workflows, not called by any app repo's CI, unrelated to the composite-action
-design above. See the caveat at the bottom of this file.
+**[`.github/workflows/`](.github/workflows/)** — this repo's own CI plus two
+fleet automations (`fleet-branch`, `prod-release`) and a release tagger. These
+run *here*, not in app repos. See [`docs/workflows.md`](docs/workflows.md).
 
 ## The two stages
 
@@ -88,16 +86,21 @@ Add `qa` the same way once dev looks right. QA additionally needs a matching
 ## Conventions
 
 Every third-party `uses:` is pinned to a full commit SHA with a version
-comment — never a floating tag. These are composite actions, deliberately,
-not `workflow_call` reusable workflows: callers keep full control of their
+comment — never a floating tag — and `scripts/verify.sh` enforces it rather
+than trusting the convention. These are composite actions, deliberately, not
+`workflow_call` reusable workflows: callers keep full control of their
 triggers, permissions, and job structure, and these just inline as ordinary
-steps. [`CLAUDE.md`](CLAUDE.md) has the full set and how to verify a change.
+steps. [`CLAUDE.md`](CLAUDE.md) has the full set.
 
-## Caveat: the admin workflows
+Run `./scripts/verify.sh` before pushing. CI runs the same script, plus
+`actionlint`.
 
-`.github/workflows/` is carried over from an internal setup and has had only
-a naming pass — identifiers genericized, actions SHA-pinned, the two
-duplicate PAT secrets collapsed into one `AUTOMATION_PAT`. Their *logic* is
-unreviewed: they clone other repos and rewrite files with `sed`, assume a
-particular chart layout, and have no dry-run mode. Read one end to end before
-dispatching it anywhere real.
+## Versioning
+
+Consumers reference these actions by ref, so a commit on `main` reaches every
+consumer immediately. `release.yml` cuts an immutable `vX.Y.Z` tag and moves a
+`vX` tag to it, the scheme `actions/checkout` uses.
+
+The templates currently point at `@main`. **Once you cut `v1`, switch the refs
+in `pipelines/templates/*.tmpl` to `@v1`** — until then there is no pinned ref
+to point at.
