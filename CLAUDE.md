@@ -31,6 +31,11 @@ editing conventions only.
   `semgrep-scan-and-comment` and `trivy-scan-and-comment` already do for
   their report/comment files. Only expose an input when a caller genuinely
   needs to vary it.
+- **`integration_branch` drives four places that must agree** — both dev
+  triggers, QA's `target-branch`, and `base-branch` on
+  `promote-candidate-image`. If the trigger and `base-branch` ever disagree,
+  every merge fails with an opaque "nothing scanned to promote". That's why
+  it's one config key rendered into all four, not four literals.
 - **Never add a `pipelines/repos.yaml` entry from pattern-matching other
   repos.** Read that repo's actual Dockerfile and existing pipeline first and
   copy its real build-args and Semgrep configs — `install-pipeline.sh` opens

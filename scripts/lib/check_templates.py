@@ -18,7 +18,11 @@ PLACEHOLDER = re.compile(r"(?<!\$)\{\{[A-Z_]+\}\}")
 
 
 def main():
-    repos = yaml.safe_load((REPO_ROOT / "pipelines" / "repos.yaml").read_text())
+    doc = yaml.safe_load((REPO_ROOT / "pipelines" / "repos.yaml").read_text()) or {}
+    repos = doc.get("repos") or {}
+    if not repos:
+        print("    pipelines/repos.yaml has no `repos:` entries")
+        return 1
     failed = False
 
     for repo in repos:

@@ -3,10 +3,10 @@ name: Dev pipeline
 on:
   pull_request:
     branches:
-      - develop
+      - {{INTEGRATION_BRANCH}}
   push:
     branches:
-      - develop
+      - {{INTEGRATION_BRANCH}}
 
 concurrency:
   group: {{SERVICE_NAME}}-image-${{ github.ref }}
@@ -24,7 +24,7 @@ permissions:
 jobs:
   semgrep:
     name: Semgrep Scan
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -38,7 +38,7 @@ jobs:
 
   build-and-scan:
     name: Build, Trivy Scan, and Push Candidate (PRs)
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
@@ -71,7 +71,7 @@ jobs:
 
   promote-image:
     name: Promote Scanned Candidate (push events)
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     if: github.event_name == 'push'
     permissions:
       contents: read
@@ -93,10 +93,11 @@ jobs:
         with:
           component-name: {{SERVICE_NAME}}
           image-repository: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          base-branch: {{INTEGRATION_BRANCH}}
 
   update-helm-repo:
     name: Update dev values.yaml in the Helm-charts repo
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     needs: promote-image
     if: github.event_name == 'push'
     steps:
@@ -105,12 +106,12 @@ jobs:
         with:
           app-id: ${{ vars.HELM_BOT_APP_ID }}
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
-          owner: atkaridarshan04
-          repositories: test-helm-charts
+          owner: {{HELM_OWNER}}
+          repositories: {{HELM_REPO_NAME}}
       - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@main
         with:
           yaml-path: {{HELM_KEY}}
-          helm-repo: atkaridarshan04/test-helm-charts
+          helm-repo: {{HELM_REPO}}
           values-file: dev/values.yaml
           image-tag: ${{ needs.promote-image.outputs.image_tag }}
           component-label: {{SERVICE_NAME}}

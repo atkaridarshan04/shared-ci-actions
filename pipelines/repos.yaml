@@ -1,36 +1,53 @@
-# Per-repo values for scripts/install-pipeline.sh.
+# Per-repo pipeline configuration for scripts/install-pipeline.sh.
 #
-# Only repos with an entry here can have a pipeline installed - the script
-# refuses to run against a repo that isn't listed, rather than guess at its
-# build args or Semgrep configs. Read the target repo's actual Dockerfile and
-# existing CI before adding an entry; a guessed entry ships a broken pipeline
-# into a real repo, not just a bad doc.
+# `defaults` applies to every repo; any repo may override any of its keys.
+# `repos` is one entry per app repo. The script refuses to run against a repo
+# that isn't listed rather than guess at its build args or Semgrep configs -
+# it opens PRs against real repos, so a guessed entry ships a broken pipeline.
 #
-# Fields:
-#   service_name      - used in image tags, component-name, component-label
-#   service_label     - human label in the Trivy comment header, e.g. "api image"
-#   helm_key          - yq path into the deploy values.yaml
-#   semgrep_configs   - space-separated Semgrep config packs, matched to the stack
-#   dockerfile_target - optional --target stage; omit if the Dockerfile has none
-#   build_args        - optional newline-separated KEY=VALUE lines
+# Not configurable here, by design - edit the template if you need to change
+# them (see docs/using/install-pipeline.md):
+#   registry        ghcr.io; changing it means changing the login step,
+#                   job permissions, and credential - not just a string
+#   release branch  the QA trigger matches release-*
+#   values paths    dev/values.yaml and qa/values.yaml in the charts repo
 
-test-api:
-  service_name: api
-  service_label: api
-  helm_key: .services.api.imageTag
-  semgrep_configs: "p/python p/fastapi p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection"
-  build_args: |
-    APP_ENV=${{ vars.APP_ENV }}
+defaults:
+  # branch PRs target and merges land on - drives both dev triggers, the QA
+  # values PR base, and which PR promote-candidate-image looks for
+  integration_branch: develop
+  # charts repo holding the values files, as "owner/name"
+  helm_repo: atkaridarshan04/test-helm-charts
+  # runner label for every job
+  runner: ubuntu-latest
 
-test-web:
-  service_name: web
-  service_label: web
-  helm_key: .services.web.imageTag
-  semgrep_configs: "p/javascript p/typescript p/react p/nextjs p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
-  dockerfile_target: runtime
+repos:
+  # Fields:
+  #   service_name       image tag suffix, component-name, component-label
+  #   service_label      human label in the Trivy comment header
+  #   helm_key           yq path into the charts repo's values.yaml
+  #   semgrep_configs    space-separated packs, matched to the repo's stack
+  #   dockerfile_target  optional --target stage
+  #   build_args         optional newline-separated KEY=VALUE lines
+  # plus any key from `defaults` above, to override it for this repo.
 
-test-worker:
-  service_name: worker
-  service_label: worker
-  helm_key: .services.worker.imageTag
-  semgrep_configs: "p/python p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
+  test-api:
+    service_name: api
+    service_label: api
+    helm_key: .services.api.imageTag
+    semgrep_configs: "p/python p/fastapi p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection"
+    build_args: |
+      APP_ENV=${{ vars.APP_ENV }}
+
+  test-web:
+    service_name: web
+    service_label: web
+    helm_key: .services.web.imageTag
+    semgrep_configs: "p/javascript p/typescript p/react p/nextjs p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
+    dockerfile_target: runtime
+
+  test-worker:
+    service_name: worker
+    service_label: worker
+    helm_key: .services.worker.imageTag
+    semgrep_configs: "p/python p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"

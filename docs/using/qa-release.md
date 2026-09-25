@@ -69,8 +69,9 @@ needs **Pull requests: Read and write** on top of Contents.
 
 ## Per-repo configuration
 
-Same as dev: one entry per repo in
+Same as dev: one entry per repo under `repos:` in
 [`pipelines/repos.yaml`](../../pipelines/repos.yaml), rendered by
-`scripts/install-pipeline.sh`. `helm_key` and `service_name` are shared
+`scripts/install-pipeline.sh`. `develop` appears throughout this doc as the
+PR base, but it comes from `integration_branch` and is configurable. `helm_key` and `service_name` are shared
 across both stages — only the values-file path differs, and that's fixed per
 stage in the templates.

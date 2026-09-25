@@ -4,7 +4,6 @@
 set -euo pipefail
 
 OWNER="${GITHUB_OWNER:-atkaridarshan04}"
-BASE_BRANCH="${BASE_BRANCH:-develop}"
 
 usage() {
   cat >&2 <<EOF
@@ -16,7 +15,8 @@ Usage: $0 <repo-name> <dev|qa> [--force]
 
 Environment:
   GITHUB_OWNER   repo owner to target (default: $OWNER)
-  BASE_BRANCH    branch to clone and open the PR against (default: $BASE_BRANCH)
+  BASE_BRANCH    branch to clone and open the PR against
+                 (default: the repo's integration_branch in pipelines/repos.yaml)
 
 Requires: gh auth login, and PyYAML for the templating step.
 EOF
@@ -37,6 +37,10 @@ LIB="$SCRIPT_DIR/lib/pipeline_lib.py"
 # render before cloning anything, so a bad config fails without side effects
 FILENAME="$(python3 "$LIB" filename "$STAGE")"
 RENDERED="$(python3 "$LIB" render "$REPO" "$STAGE")"
+
+# the PR base must match the branch the rendered pipeline triggers on, so it
+# comes from the same config rather than a second, independently-set default
+BASE_BRANCH="${BASE_BRANCH:-$(python3 "$LIB" config "$REPO" integration_branch)}"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT

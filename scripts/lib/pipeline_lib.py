@@ -18,6 +18,8 @@ STAGE_FILES = {
     "qa": ("qa-release.yml.tmpl", "qa-release.yml"),
 }
 
+REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner")
+
 # indentation of a `with:` key inside a step, in the templates
 WITH_INDENT = " " * 10
 
@@ -28,15 +30,34 @@ BLOCK_PLACEHOLDERS = {"EXTRA_BUILD_INPUTS"}
 
 
 def load_config(repo):
-    all_config = yaml.safe_load(CONFIG_PATH.read_text())
-    if repo not in all_config:
+    """Return one repo's config, with `defaults` merged in underneath it."""
+    doc = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+    defaults = doc.get("defaults") or {}
+    repos = doc.get("repos") or {}
+
+    missing = [k for k in REQUIRED_DEFAULTS if k not in defaults]
+    if missing:
+        print(
+            f"pipelines/repos.yaml is missing required defaults: {', '.join(missing)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if repo not in repos:
         print(
             f"No config entry for '{repo}' in pipelines/repos.yaml - "
             "add one first (see the file's header comment).",
             file=sys.stderr,
         )
         sys.exit(1)
-    return all_config[repo]
+
+    # per-repo keys win over defaults
+    return {**defaults, **repos[repo]}
+
+
+def list_repos():
+    doc = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+    return list((doc.get("repos") or {}))
 
 
 def extra_build_inputs(config):
@@ -64,11 +85,25 @@ def extra_build_inputs(config):
 
 
 def render(template_text, config):
+    helm_repo = config["helm_repo"]
+    if "/" not in helm_repo:
+        print(
+            f"helm_repo must be \"owner/name\", got '{helm_repo}'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    helm_owner, helm_repo_name = helm_repo.split("/", 1)
+
     values = {
         "SERVICE_NAME": config["service_name"],
         "SERVICE_LABEL": config["service_label"],
         "HELM_KEY": config["helm_key"],
         "SEMGREP_CONFIGS": config.get("semgrep_configs", ""),
+        "INTEGRATION_BRANCH": config["integration_branch"],
+        "RUNNER": config["runner"],
+        "HELM_REPO": helm_repo,
+        "HELM_OWNER": helm_owner,
+        "HELM_REPO_NAME": helm_repo_name,
         "EXTRA_BUILD_INPUTS": extra_build_inputs(config),
     }
 
@@ -96,15 +131,33 @@ def cmd_filename(stage):
     print(STAGE_FILES[stage][1])
 
 
+def cmd_config(repo, key):
+    value = load_config(repo).get(key)
+    if value is None:
+        print(f"No '{key}' for '{repo}' in pipelines/repos.yaml", file=sys.stderr)
+        sys.exit(1)
+    print(value)
+
+
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] not in {"render", "filename"}:
-        print("usage: pipeline_lib.py <render <repo> <stage>|filename <stage>>", file=sys.stderr)
+    commands = {"render", "filename", "config", "list-repos"}
+    if len(sys.argv) < 2 or sys.argv[1] not in commands:
+        print(
+            "usage: pipeline_lib.py <render <repo> <stage>|filename <stage>|"
+            "config <repo> <key>|list-repos>",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
-    if sys.argv[1] == "render":
+    cmd = sys.argv[1]
+    if cmd == "render":
         cmd_render(sys.argv[2], sys.argv[3])
-    else:
+    elif cmd == "filename":
         cmd_filename(sys.argv[2])
+    elif cmd == "config":
+        cmd_config(sys.argv[2], sys.argv[3])
+    else:
+        print("\n".join(list_repos()))
 
 
 if __name__ == "__main__":

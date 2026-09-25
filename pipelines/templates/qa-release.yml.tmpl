@@ -18,7 +18,7 @@ permissions:
 jobs:
   build-scan-push:
     name: Build, Trivy Scan, and Push
-    runs-on: ubuntu-latest
+    runs-on: {{RUNNER}}
     permissions:
       contents: read
       packages: write
@@ -55,8 +55,8 @@ jobs:
         run: docker push "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
   update-helm-repo:
-    name: Update QA values.yaml (PR to develop)
-    runs-on: ubuntu-latest
+    name: Update QA values.yaml (PR to {{INTEGRATION_BRANCH}})
+    runs-on: {{RUNNER}}
     needs: build-scan-push
     steps:
       - id: helm-app-token
@@ -64,16 +64,16 @@ jobs:
         with:
           app-id: ${{ vars.HELM_BOT_APP_ID }}
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
-          owner: atkaridarshan04
-          repositories: test-helm-charts
+          owner: {{HELM_OWNER}}
+          repositories: {{HELM_REPO_NAME}}
       - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@main
         with:
           yaml-path: {{HELM_KEY}}
-          helm-repo: atkaridarshan04/test-helm-charts
+          helm-repo: {{HELM_REPO}}
           values-file: qa/values.yaml
           image-tag: ${{ needs.build-scan-push.outputs.image_tag }}
           component-label: {{SERVICE_NAME}}
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
           mode: pr
           source-branch: ${{ github.ref_name }}
-          target-branch: develop
+          target-branch: {{INTEGRATION_BRANCH}}

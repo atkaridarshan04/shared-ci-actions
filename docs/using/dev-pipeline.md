@@ -133,7 +133,10 @@ to guard against.
 ## Per-repo configuration
 
 Build args, Semgrep configs, the values-file key, and any Dockerfile target
-live in [`pipelines/repos.yaml`](../../pipelines/repos.yaml), one entry per repo.
+live in [`pipelines/repos.yaml`](../../pipelines/repos.yaml), one entry per
+repo, under a `repos:` map. Fleet-wide settings — the integration branch
+(`develop` throughout this doc, but configurable), the charts repo, and the
+runner label — live in the `defaults:` block above it.
 `scripts/install-pipeline.sh` renders the template against that entry — see
 [`install-pipeline.md`](install-pipeline.md). The QA stage is documented in
 [`qa-release.md`](qa-release.md).

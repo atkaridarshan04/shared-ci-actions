@@ -48,21 +48,69 @@ cannot be inferred by pattern-matching against other repos — a guessed entry
 ships a broken pipeline into a real repo, not just a bad doc. Read the target
 repo's Dockerfile and existing CI, then add the entry.
 
-## Adding a repo
+## Configuration
 
-See the header comment in [`pipelines/repos.yaml`](../../pipelines/repos.yaml)
-for the field list. Minimum viable entry:
+[`pipelines/repos.yaml`](../../pipelines/repos.yaml) has two sections.
+`defaults` applies to every repo; `repos` holds one entry each. Any repo may
+override any default.
 
 ```yaml
-my-service:
-  service_name: api
-  service_label: api
-  helm_key: .services.api.imageTag
-  semgrep_configs: "p/python p/dockerfile p/secrets"
+defaults:
+  integration_branch: develop
+  helm_repo: atkaridarshan04/test-helm-charts
+  runner: ubuntu-latest
+
+repos:
+  my-service:
+    service_name: api
+    service_label: api
+    helm_key: .services.api.imageTag
+    semgrep_configs: "p/python p/dockerfile p/secrets"
 ```
 
-`dockerfile_target` and `build_args` are optional — omit them and the
-corresponding action inputs are left out of the rendered file entirely.
+### Per-repo fields
+
+| Field | Required | Meaning |
+|---|---|---|
+| `service_name` | yes | image tag suffix, `component-name`, `component-label` |
+| `service_label` | yes | human label in the Trivy comment header |
+| `helm_key` | yes | yq path into the charts repo's values file |
+| `semgrep_configs` | yes | space-separated packs, matched to the repo's stack |
+| `dockerfile_target` | no | `--target` stage; omitted entirely when unset |
+| `build_args` | no | newline-separated `KEY=VALUE`; omitted entirely when unset |
+
+### Defaults, overridable per repo
+
+| Field | Default | Drives |
+|---|---|---|
+| `integration_branch` | `develop` | both dev triggers, QA's PR base, and `base-branch` on `promote-candidate-image` |
+| `helm_repo` | — | `helm-repo`, plus the App token's `owner` / `repositories` scoping |
+| `runner` | `ubuntu-latest` | `runs-on` for every job |
+
+`integration_branch` is deliberately one setting driving four places. They
+must agree: if the pipeline triggers on `main` but `promote-candidate-image`
+looks for PRs against `develop`, every merge fails with "nothing scanned to
+promote."
+
+```yaml
+repos:
+  legacy-service:
+    integration_branch: main      # this repo never adopted develop
+    runner: self-hosted
+    service_name: api
+    ...
+```
+
+## What isn't configurable
+
+Deliberately fixed in the templates. Change these by editing
+[`pipelines/templates/`](../../pipelines/templates) directly:
+
+| | Why |
+|---|---|
+| Registry (`ghcr.io`) | Changing it means changing the login step, job permissions, and credential — not just a string. A setting here would half-work and fail confusingly. |
+| Release branch pattern (`release-*`) | Convention; changing it is rare enough not to earn permanent API surface. |
+| Values paths (`dev/values.yaml`, `qa/values.yaml`) | Same. |
 
 ## What the repo needs before the pipeline will pass
 
