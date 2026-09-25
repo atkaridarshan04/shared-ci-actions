@@ -1,8 +1,6 @@
 name: Fleet - cut a branch across repos
 
-# Replaces the old release-branch + hotfix-release pair, which were the same
-# operation with a different source branch. A release cut is from-branch
-# develop; a hotfix cut is from-branch release-x.y.z.
+# A release cut is from-branch develop; a hotfix cut is from-branch release-x.y.z.
 #
 # Creates the branch through the Git refs API rather than cloning each repo:
 # one request instead of a full clone per repo, and nothing to clean up.
