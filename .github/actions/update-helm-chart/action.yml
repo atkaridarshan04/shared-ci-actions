@@ -54,9 +54,9 @@ inputs:
     description: >
       git author/committer name for the commit. Defaults to github.actor,
       which is whoever triggered the calling workflow - not the identity
-      behind helm-repo-token. For a GitHub App token, pass
-      "${{ steps.<app-token-step>.outputs.app-slug }}[bot]" so the commit is
-      attributed to the App, not to whichever human merged.
+      behind helm-repo-token. For a GitHub App token, pass the app-token
+      step's app-slug output plus "[bot]" so the commit is attributed to the
+      App, not to whichever human merged.
     required: false
     default: ""
   commit-user-email:
