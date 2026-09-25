@@ -103,7 +103,9 @@ jobs:
           git commit -m "Promote ${RELEASE_TAG} to prod"
 
           # the old workflow assumed the branch was new; re-running a promote
-          # after a fixup has to update the existing branch, not fail on it
+          # after a fixup has to update the existing branch, not fail on it.
+          # fetch it first so --force-with-lease has a ref to compare against.
+          git fetch origin "$BRANCH" 2>/dev/null || true
           git push --force-with-lease origin "HEAD:${BRANCH}"
 
           if gh pr list --repo "$HELM_REPO" --head "$BRANCH" --base "$BASE_BRANCH" \
