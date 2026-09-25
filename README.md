@@ -54,6 +54,7 @@ app repo; `maintaining/` is for someone changing this repo.
 | [`using/github-app-setup.md`](docs/using/github-app-setup.md) | required setup for the cross-repo charts credential |
 | [`maintaining/workflows.md`](docs/maintaining/workflows.md) | the workflows that run in *this* repo |
 | [`maintaining/verifying.md`](docs/maintaining/verifying.md) | `verify.sh`, what it covers, and what it doesn't |
+| [`maintaining/versioning.md`](docs/maintaining/versioning.md) | releases, the `@v1` scheme, Dependabot, and bumping template pins |
 
 ## The two stages
 
@@ -114,4 +115,6 @@ consumer immediately. `release.yml` cuts an immutable `vX.Y.Z` tag and moves a
 
 The templates currently point at `@main`. **Once you cut `v1`, switch the refs
 in `pipelines/templates/*.tmpl` to `@v1`** — until then there is no pinned ref
-to point at.
+to point at. See [`maintaining/versioning.md`](docs/maintaining/versioning.md)
+for what counts as a breaking change, and for Dependabot's blind spot on
+template pins.

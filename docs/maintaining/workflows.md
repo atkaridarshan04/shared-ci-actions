@@ -33,9 +33,9 @@ It refuses to reuse an existing version tag, requires a bare `X.Y.Z` (no
 leading `v`, no prerelease suffix), and runs `verify.sh` before tagging so a
 release can't be cut from a broken tree.
 
-> The templates reference this repo at `@main`, so every commit here reaches
-> every consumer immediately. Once you cut `v1`, change those refs in
-> `pipelines/templates/*.tmpl` to `@v1`.
+[`versioning.md`](versioning.md) covers the rest: what counts as a breaking
+change, how consumers should pin, and why the templates still point at
+`@main`.
 
 ## `fleet-branch.yml`
 

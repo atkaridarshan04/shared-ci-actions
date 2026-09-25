@@ -59,4 +59,5 @@ injected `@v4`, the template check against a typo'd placeholder.
   are verified as YAML, not executed.
 - `actionlint` reads `.github/workflows/` only. It does not lint composite
   `action.yml` files or `pipelines/templates/*.tmpl`.
-- Nothing detects a stale SHA pin — only an unpinned one.
+- Nothing detects a stale SHA pin — only an unpinned one. See
+  [`versioning.md`](versioning.md).
