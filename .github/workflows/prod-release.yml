@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 env:
-  HELM_REPO: atkaridarshan04/test-prod-helm-charts
+  HELM_REPO: atkaridarshan04/test-helm-charts
   VALUES_FILE: prod/values.yaml
   YQ_VERSION: v4.53.6
   # One yq path per line. Add a line here when a service is onboarded to prod;
