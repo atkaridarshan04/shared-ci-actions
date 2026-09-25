@@ -65,9 +65,12 @@ git add "$TARGET"
 git commit -m "Add $STAGE pipeline calling shared composite actions"
 git push -u origin "ci/add-${STAGE}-pipeline"
 
+# --head explicit: gh's push-detection reads the upstream tracking ref,
+# which is unreliable straight after a shallow clone's first push
 gh pr create \
   --repo "$OWNER/$REPO" \
   --base "$BASE_BRANCH" \
+  --head "ci/add-${STAGE}-pipeline" \
   --title "Add $STAGE pipeline (shared composite actions)" \
   --body "Adds \`$TARGET\`, calling the composite actions in $OWNER/shared-ci-actions instead of inline steps.
 
