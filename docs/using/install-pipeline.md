@@ -70,3 +70,7 @@ corresponding action inputs are left out of the rendered file entirely.
 - a `Dockerfile` the build step can use
 - the Helm-charts repo entry named by `helm_key`, and the App credentials
   from [`github-app-setup.md`](github-app-setup.md)
+
+The scan gates are blocking by default. See
+[`security-scanning.md`](security-scanning.md) before the first PR, so a red
+run isn't a surprise.

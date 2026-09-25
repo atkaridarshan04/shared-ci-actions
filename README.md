@@ -49,6 +49,7 @@ app repo; `maintaining/` is for someone changing this repo.
 |---|---|
 | [`using/dev-pipeline.md`](docs/using/dev-pipeline.md) | PR → `develop`: build once, promote by digest, tagging scheme, failure modes |
 | [`using/qa-release.md`](docs/using/qa-release.md) | release branches, and why QA lands through a PR |
+| [`using/security-scanning.md`](docs/using/security-scanning.md) | **what to do when a scan blocks your PR** — suppression mechanics and policy |
 | [`using/install-pipeline.md`](docs/using/install-pipeline.md) | installing a stage into a repo, and what that repo needs first |
 | [`using/github-app-setup.md`](docs/using/github-app-setup.md) | required setup for the cross-repo charts credential |
 | [`maintaining/workflows.md`](docs/maintaining/workflows.md) | the workflows that run in *this* repo |
