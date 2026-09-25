@@ -50,6 +50,22 @@ inputs:
     description: yq release to install when the runner doesn't already have it.
     required: false
     default: v4.53.6
+  commit-user-name:
+    description: >
+      git author/committer name for the commit. Defaults to github.actor,
+      which is whoever triggered the calling workflow - not the identity
+      behind helm-repo-token. For a GitHub App token, pass
+      "${{ steps.<app-token-step>.outputs.app-slug }}[bot]" so the commit is
+      attributed to the App, not to whichever human merged.
+    required: false
+    default: ""
+  commit-user-email:
+    description: >
+      git author/committer email for the commit. See commit-user-name. For a
+      GitHub App, GitHub's documented format is
+      "<app-id>+<app-slug>[bot]@users.noreply.github.com".
+    required: false
+    default: ""
 outputs:
   pr-number:
     description: The opened/reused PR number, set only in "pr" mode.
@@ -131,10 +147,12 @@ runs:
         VALUES_FILE: ${{ inputs.values-file }}
         TARGET_BRANCH: ${{ inputs.target-branch }}
         ACTOR: ${{ github.actor }}
+        COMMIT_USER_NAME: ${{ inputs.commit-user-name }}
+        COMMIT_USER_EMAIL: ${{ inputs.commit-user-email }}
       run: |
         set -uo pipefail
-        git config user.name "$ACTOR"
-        git config user.email "${ACTOR}@users.noreply.github.com"
+        git config user.name "${COMMIT_USER_NAME:-$ACTOR}"
+        git config user.email "${COMMIT_USER_EMAIL:-${ACTOR}@users.noreply.github.com}"
 
         for attempt in 1 2 3 4 5; do
           git add "$VALUES_FILE"
@@ -166,10 +184,12 @@ runs:
         VALUES_FILE: ${{ inputs.values-file }}
         SOURCE_BRANCH: ${{ inputs.source-branch }}
         ACTOR: ${{ github.actor }}
+        COMMIT_USER_NAME: ${{ inputs.commit-user-name }}
+        COMMIT_USER_EMAIL: ${{ inputs.commit-user-email }}
       run: |
         set -euo pipefail
-        git config user.name "$ACTOR"
-        git config user.email "${ACTOR}@users.noreply.github.com"
+        git config user.name "${COMMIT_USER_NAME:-$ACTOR}"
+        git config user.email "${COMMIT_USER_EMAIL:-${ACTOR}@users.noreply.github.com}"
         git add "$VALUES_FILE"
         git commit -m "Update ${COMPONENT_LABEL} imageTag to ${IMAGE_TAG}" || echo "No changes to commit"
         git push origin "HEAD:${SOURCE_BRANCH}"

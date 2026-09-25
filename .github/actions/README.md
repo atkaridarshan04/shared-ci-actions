@@ -202,10 +202,19 @@ one-time setup in
           image-tag: ${{ needs.promote-image.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
+          commit-user-name: ${{ steps.helm-app-token.outputs.app-slug }}[bot]
+          commit-user-email: ${{ vars.HELM_BOT_APP_ID }}+${{ steps.helm-app-token.outputs.app-slug }}[bot]@users.noreply.github.com
 ```
 
 The job needs no special `permissions:` - it never writes to the repo it is
 running in.
+
+`commit-user-name`/`commit-user-email` set the git author/committer identity
+for the commit in the charts repo. Without them the commit falls back to
+`github.actor` - whoever triggered the calling workflow, not the identity
+behind `helm-repo-token` - so an App-authenticated push would still show up
+authored by a person. Pass the App's own bot identity as above so the charts
+repo's history correctly attributes the change to the automation.
 
 `mode` defaults to `direct-commit`: push straight to `target-branch`,
 re-applying the edit onto the latest remote state if another run pushed
@@ -227,6 +236,8 @@ a branch of that name.
           image-tag: ${{ needs.build-scan-push.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
+          commit-user-name: ${{ steps.helm-app-token.outputs.app-slug }}[bot]
+          commit-user-email: ${{ vars.HELM_BOT_APP_ID }}+${{ steps.helm-app-token.outputs.app-slug }}[bot]@users.noreply.github.com
           mode: pr
           source-branch: ${{ github.ref_name }}
           target-branch: develop
