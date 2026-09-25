@@ -1,0 +1,18 @@
+version: 2
+
+updates:
+  # Keeps the SHA pins current. Without this, pinning rots: the pins stay put
+  # while the actions move on, and the convention becomes a liability rather
+  # than a safeguard.
+  #
+  # Note: Dependabot reads .github/workflows/ and composite action.yml files.
+  # It does NOT read pipelines/templates/*.tmpl - those pins must be bumped by
+  # hand. scripts/verify.sh at least enforces that they stay SHA-pinned.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    labels:
+      - dependencies
