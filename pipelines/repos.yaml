@@ -20,6 +20,10 @@ defaults:
   helm_repo: atkaridarshan04/test-helm-charts
   # runner label for every job
   runner: ubuntu-latest
+  # which version of THIS repo the rendered pipelines call. `main` means every
+  # commit here reaches consumers immediately - switch to `v1` once the first
+  # release is cut. A single repo can pin exactly with e.g. `v1.2.3`.
+  actions_ref: main
 
 repos:
   # Fields:

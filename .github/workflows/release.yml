@@ -42,11 +42,34 @@ jobs:
             exit 1
           fi
 
-      - name: Verify the tree passes its own checks
+      # a major bump that forgets this leaves consumers on @v2 rendering
+      # templates that still call @v1 - the exact mistake worth catching here,
+      # rather than rewriting the file automatically and pushing during a release
+      - name: Check actions_ref matches the version being cut
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           pip install pyyaml --quiet
-          ./scripts/verify.sh
+          REF="$(python3 scripts/lib/pipeline_lib.py default actions_ref)"
+          MAJOR="v${VERSION%%.*}"
+
+          if [ "$REF" = "main" ]; then
+            echo "::notice::pipelines/repos.yaml still has actions_ref: main."
+            echo "::notice::After this release, set it to ${MAJOR} so rendered pipelines pin to the release."
+            exit 0
+          fi
+
+          # v1 and v1.2.3 both satisfy a 1.x release; v1 does not satisfy 2.0.0
+          if [ "${REF%%.*}" != "$MAJOR" ]; then
+            echo "::error::Cutting v${VERSION} but pipelines/repos.yaml has actions_ref: ${REF}."
+            echo "::error::Set actions_ref to ${MAJOR} first - consumers on ${MAJOR} would otherwise render pipelines calling ${REF}."
+            exit 1
+          fi
+          echo "actions_ref ${REF} matches ${MAJOR}."
+
+      - name: Verify the tree passes its own checks
+        run: ./scripts/verify.sh
 
       - name: Create version tag and move the major tag
         env:

@@ -18,7 +18,7 @@ STAGE_FILES = {
     "qa": ("qa-release.yml.tmpl", "qa-release.yml"),
 }
 
-REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner")
+REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner", "actions_ref")
 
 # indentation of a `with:` key inside a step, in the templates
 WITH_INDENT = " " * 10
@@ -53,6 +53,11 @@ def load_config(repo):
 
     # per-repo keys win over defaults
     return {**defaults, **repos[repo]}
+
+
+def load_default(key):
+    doc = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+    return (doc.get("defaults") or {}).get(key)
 
 
 def list_repos():
@@ -100,6 +105,7 @@ def render(template_text, config):
         "HELM_KEY": config["helm_key"],
         "SEMGREP_CONFIGS": config.get("semgrep_configs", ""),
         "INTEGRATION_BRANCH": config["integration_branch"],
+        "ACTIONS_REF": config["actions_ref"],
         "RUNNER": config["runner"],
         "HELM_REPO": helm_repo,
         "HELM_OWNER": helm_owner,
@@ -131,6 +137,14 @@ def cmd_filename(stage):
     print(STAGE_FILES[stage][1])
 
 
+def cmd_default(key):
+    value = load_default(key)
+    if value is None:
+        print(f"No default '{key}' in pipelines/repos.yaml", file=sys.stderr)
+        sys.exit(1)
+    print(value)
+
+
 def cmd_config(repo, key):
     value = load_config(repo).get(key)
     if value is None:
@@ -140,11 +154,11 @@ def cmd_config(repo, key):
 
 
 def main():
-    commands = {"render", "filename", "config", "list-repos"}
+    commands = {"render", "filename", "config", "default", "list-repos"}
     if len(sys.argv) < 2 or sys.argv[1] not in commands:
         print(
             "usage: pipeline_lib.py <render <repo> <stage>|filename <stage>|"
-            "config <repo> <key>|list-repos>",
+            "config <repo> <key>|default <key>|list-repos>",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -156,6 +170,8 @@ def main():
         cmd_filename(sys.argv[2])
     elif cmd == "config":
         cmd_config(sys.argv[2], sys.argv[3])
+    elif cmd == "default":
+        cmd_default(sys.argv[2])
     else:
         print("\n".join(list_repos()))
 

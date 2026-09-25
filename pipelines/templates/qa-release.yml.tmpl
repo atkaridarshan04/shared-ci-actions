@@ -29,17 +29,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - id: pr
-        uses: atkaridarshan04/shared-ci-actions/.github/actions/resolve-pr-for-branch@main
+        uses: atkaridarshan04/shared-ci-actions/.github/actions/resolve-pr-for-branch@{{ACTIONS_REF}}
         with:
           branch: ${{ github.ref_name }}
 
       # build and scan before logging in: nothing unscanned can reach the registry
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@main
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@{{ACTIONS_REF}}
         with:
           image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
 {{EXTRA_BUILD_INPUTS}}
 
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@main
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@{{ACTIONS_REF}}
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           label: {{SERVICE_LABEL}} image
@@ -66,7 +66,7 @@ jobs:
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
           owner: {{HELM_OWNER}}
           repositories: {{HELM_REPO_NAME}}
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@main
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@{{ACTIONS_REF}}
         with:
           yaml-path: {{HELM_KEY}}
           helm-repo: {{HELM_REPO}}
