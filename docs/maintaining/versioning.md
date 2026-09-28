@@ -86,7 +86,13 @@ This is the most likely thing here to be quietly wrong in six months.
 
 ## Announcing a release
 
-There's no changelog — tag messages and PR history are enough for consumers
-that are pipelines. But Dependabot won't tell anyone about a **major**: it
-doesn't track this repo's tags unless they pin `@vX.Y.Z`. Tell them, or expect
-`@v1` consumers to sit on v1 forever.
+`release.yml` publishes a GitHub Release from the tag, with notes generated
+from the commits. That keeps the Releases page in step with the tags — it
+drifted once already, because `v1.0.0` was published by hand and nothing
+published `v1.0.1`.
+
+Generated notes are a commit list, so they never say what a consumer has to
+*do*. When a version needs action — a renamed variable, a re-render — edit the
+Release and spell it out; `v1.0.1` needed both. Dependabot won't announce a
+**major** either: it doesn't track this repo's tags unless they pin
+`@vX.Y.Z`. Tell them, or expect `@v1` consumers to sit on v1 forever.

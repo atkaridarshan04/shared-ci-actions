@@ -98,3 +98,22 @@ jobs:
             echo ""
             echo "Consumers referencing \`@${MAJOR}\` pick this up on their next run."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # without this the Releases page keeps showing whichever version was last
+      # published by hand as "Latest", which is how it drifted behind the tags
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if gh release view "v${VERSION}" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists, leaving it alone."
+            exit 0
+          fi
+          gh release create "v${VERSION}" \
+            --repo "$REPO" \
+            --title "v${VERSION}" \
+            --verify-tag \
+            --generate-notes
