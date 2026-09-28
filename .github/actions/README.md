@@ -190,7 +190,7 @@ one-time setup in
       - id: helm-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ vars.HELM_BOT_APP_ID }}
+          client-id: ${{ vars.HELM_BOT_APP_ID }}
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
           owner: atkaridarshan04
           repositories: test-helm-charts
