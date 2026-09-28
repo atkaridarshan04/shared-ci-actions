@@ -110,5 +110,18 @@ The target repo needs its integration branch and a `Dockerfile`; the charts
 repo needs the key named by `helm_key`; and the App credentials from
 [github-app-setup](github-app-setup.md) must exist.
 
+If this repo is ever made private (or forked into a private org), every
+caller repo needs read access to it before its `uses:
+.../shared-ci-actions/...` steps will resolve, or the job fails with
+`Unable to resolve action ...repository not found`. Not needed while this
+repo stays public. To grant it (one-time, requires admin on this repo, not
+just write):
+
+1. Go to this repo's **Settings → Actions → General**.
+2. Scroll to the **Access** section at the bottom.
+3. Select **"Accessible from repositories in the '\<org\>' organization"**
+   (or list specific repositories instead).
+4. Click **Save**.
+
 Scan gates block by default — read
 [security-scanning](security-scanning.md) first so a red PR isn't a surprise.
