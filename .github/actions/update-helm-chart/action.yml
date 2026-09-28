@@ -61,9 +61,9 @@ inputs:
     default: ""
   commit-user-email:
     description: >
-      git author/committer email for the commit. See commit-user-name. For a
-      GitHub App, GitHub's documented format is
-      "<app-id>+<app-slug>[bot]@users.noreply.github.com".
+      git author/committer email for the commit. See commit-user-name. A bot
+      address is "<account-id>+<name>@users.noreply.github.com" - a mismatched
+      id leaves the author unlinked.
     required: false
     default: ""
 outputs:

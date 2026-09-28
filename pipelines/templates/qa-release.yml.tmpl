@@ -62,7 +62,7 @@ jobs:
       - id: helm-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.HELM_BOT_APP_ID }}
+          client-id: ${{ vars.HELM_BOT_CLIENT_ID }}
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
           owner: {{HELM_OWNER}}
           repositories: {{HELM_REPO_NAME}}
@@ -74,8 +74,8 @@ jobs:
           image-tag: ${{ needs.build-scan-push.outputs.image_tag }}
           component-label: {{SERVICE_NAME}}
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
-          commit-user-name: ${{ steps.helm-app-token.outputs.app-slug }}[bot]
-          commit-user-email: ${{ vars.HELM_BOT_APP_ID }}+${{ steps.helm-app-token.outputs.app-slug }}[bot]@users.noreply.github.com
+          commit-user-name: github-actions[bot]
+          commit-user-email: 41898282+github-actions[bot]@users.noreply.github.com
           mode: pr
           source-branch: ${{ github.ref_name }}
           target-branch: {{INTEGRATION_BRANCH}}

@@ -26,10 +26,11 @@ account owning the charts repo.
   - everything else **No access**
 - **Where can this be installed?**: *Only on this account*
 
-## 2. App ID → a variable
+## 2. Client ID → a variable
 
-The settings page shows an **App ID**. Not secret — store as an Actions
-**variable** named `HELM_BOT_APP_ID`.
+The settings page shows both an **App ID** and a **Client ID**; take the
+**Client ID** (`app-id` is deprecated). Not secret — store as an Actions
+**variable** named `HELM_BOT_CLIENT_ID`.
 
 ## 3. Private key → a secret
 
@@ -56,7 +57,7 @@ In every caller, immediately before `update-helm-chart`:
       - id: helm-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          client-id: ${{ vars.HELM_BOT_APP_ID }}
+          client-id: ${{ vars.HELM_BOT_CLIENT_ID }}
           private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
           owner: atkaridarshan04
           repositories: test-helm-charts
@@ -69,12 +70,12 @@ In every caller, immediately before `update-helm-chart`:
           image-tag: ${{ needs.promote-image.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
-          commit-user-name: ${{ steps.helm-app-token.outputs.app-slug }}[bot]
-          commit-user-email: ${{ vars.HELM_BOT_APP_ID }}+${{ steps.helm-app-token.outputs.app-slug }}[bot]@users.noreply.github.com
+          commit-user-name: github-actions[bot]
+          commit-user-email: 41898282+github-actions[bot]@users.noreply.github.com
 ```
 
-Without `commit-user-name`/`commit-user-email` the commit falls back to
-`github.actor` - a person, not the App that actually pushed it.
+`commit-user-name`/`commit-user-email` mark the commit as automation - without
+them it falls back to `github.actor` and the bump looks like a hand edit.
 
 The rendered templates already do this — the block is here for reference.
 `repositories:` scopes the *generated token* too, on top of the App only being
