@@ -5,11 +5,21 @@ editing conventions only.
 
 ## Conventions to apply on every edit
 
-- **Composite actions only** — `.github/actions/*/action.yml` with
-  `runs: using: composite`, never a `workflow_call` reusable workflow. This
-  was a deliberate choice: callers stay in full control of triggers,
-  permissions, and job structure; these actions just inline as ordinary
-  steps. Don't introduce `on: workflow_call` here.
+- **Composite actions hold all step-level logic; `workflow_call` reusable
+  workflows are allowed for a whole pipeline stage, but only once that shape
+  is proven uniform.** `.github/actions/*/action.yml`
+  (`runs: using: composite`) is still what every job's steps call - a
+  reusable workflow under `.github/workflows/` just stitches those same
+  actions into one canonical job sequence instead of a per-repo rendered
+  copy. Only convert a stage to `workflow_call` after confirming, from the
+  real rendered pipeline in every `pipelines/repos.yaml` entry, that the
+  stage has zero structural divergence across repos - same triggers, jobs,
+  and permissions - with every actual difference already a `repos.yaml`
+  field. `dev-pipeline.yml` was converted on that basis (`test-api` is the
+  only real consumer and was migrated in the same change); `qa-release`
+  stays a per-repo template in `pipelines/templates/` until it gets the same
+  audit. Don't add a new reusable workflow on spec - divergence that hasn't
+  been checked for is divergence you can't rule out.
 - **Pin every third-party `uses:` to a full commit SHA with a `# vX.Y.Z`
   comment** — never a floating tag (`@v3`), never `@master`/`@main`. Resolve
   the SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. This

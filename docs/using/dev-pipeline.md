@@ -2,9 +2,12 @@
 
 PR into `develop` → scan → build → merge → rebuild + rescan → deploy.
 
-The logic lives **once**, as the composite actions in
-[`.github/actions/`](../../.github/actions/README.md); each repo's
-`dev-pipeline.yml` is a thin caller rendered from
+The step-level logic lives **once**, as the composite actions in
+[`.github/actions/`](../../.github/actions/README.md). The pipeline *shape*
+itself also lives once, as the
+[`dev-pipeline.yml` reusable workflow](../../.github/workflows/dev-pipeline.yml):
+every app repo's `dev-pipeline.yml` is a thin trigger block plus one `uses:`
+job calling it, rendered from
 [the template](../../pipelines/templates/dev-pipeline.yml.tmpl). The
 alternative — one file copy-pasted into fifteen repos — drifts: a gate gets
 quietly disabled in one, a fix lands in three, nobody knows which are current.

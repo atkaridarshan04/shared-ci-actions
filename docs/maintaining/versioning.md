@@ -54,7 +54,12 @@ The contract is an action's inputs, outputs, and observable side effects.
 - changing a default that changes behaviour for someone who never set it
 - changing what a step writes, pushes, or tags
 
-**Minor** for a new optional input with a compatible default, or a new action.
+**Minor** for a new optional input with a compatible default, or a new action
+— the same rule covers adding a new reusable workflow like `dev-pipeline.yml`:
+it doesn't change any existing action's inputs, outputs, or side effects, so
+repos still on the old per-repo `dev-pipeline.yml` template keep working
+unchanged until they re-run `install-pipeline.sh --force` to pick up the
+short caller.
 **Patch** for fixes that don't touch the contract.
 
 Two that look safe and aren't:
@@ -73,9 +78,13 @@ This is what makes pinning sustainable. Without it pins rot — you get the
 maintenance cost of pinning and none of the currency of floating.
 
 **Blind spot:** it reads `.github/workflows/` and composite `action.yml` files,
-not `pipelines/templates/*.tmpl`. Template pins are manual. `verify.sh` proves
-they stay *pinned*, but nothing tells you they're *stale*. When Dependabot
-bumps an action, check whether a template uses it too:
+not `pipelines/templates/*.tmpl`. `dev-pipeline.yml`'s own third-party pins
+(`docker/login-action`, `actions/create-github-app-token`, …) are covered
+since it lives in `.github/workflows/` — that's a side benefit of the
+`workflow_call` conversion. `qa-release.yml.tmpl`'s pins are still the blind
+spot: manual, with `verify.sh` only proving they stay *pinned*, not that
+they're *current*. When Dependabot bumps an action, check whether the qa
+template uses it too:
 
 ```
 grep -rn 'uses:.*@' pipelines/templates/

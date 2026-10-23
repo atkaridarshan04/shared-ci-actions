@@ -8,125 +8,24 @@ on:
     branches:
       - {{INTEGRATION_BRANCH}}
 
-concurrency:
-  group: {{SERVICE_NAME}}-image-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  REGISTRY: ghcr.io
-  # GHCR paths must be lowercase; set this explicitly if your owner or repo
-  # name has uppercase letters.
-  IMAGE_NAME: ${{ github.repository }}
-
-permissions:
-  contents: read
-
 jobs:
-  semgrep:
-    name: Semgrep Scan
-    runs-on: {{RUNNER}}
-    if: github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/semgrep-scan-and-comment@{{ACTIONS_REF}}
-        with:
-          semgrep-configs: >-
-            {{SEMGREP_CONFIGS}}
-
-  build-and-scan:
-    name: Build, Trivy Scan, and Push Candidate (PRs)
-    runs-on: {{RUNNER}}
-    if: github.event_name == 'pull_request'
+  dev-pipeline:
+    uses: atkaridarshan04/shared-ci-actions/.github/workflows/dev-pipeline.yml@{{ACTIONS_REF}}
     permissions:
       contents: read
       packages: write
       pull-requests: write
-    env:
-      CANDIDATE_TAG: pr-${{ github.event.pull_request.number }}-{{SERVICE_NAME}}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # build and scan before logging in: nothing unscanned can reach the registry
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@{{ACTIONS_REF}}
-        with:
-          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CANDIDATE_TAG }}
+    with:
+      service-name: {{SERVICE_NAME}}
+      service-label: {{SERVICE_LABEL}}
+      helm-key: {{HELM_KEY}}
+      semgrep-configs: >-
+        {{SEMGREP_CONFIGS}}
 {{EXTRA_BUILD_INPUTS}}
-
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@{{ACTIONS_REF}}
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CANDIDATE_TAG }}
-          label: {{SERVICE_LABEL}} image
-
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push scanned candidate image
-        run: docker push "${REGISTRY}/${IMAGE_NAME}:${CANDIDATE_TAG}"
-
-  push-image:
-    name: Rebuild, Trivy Scan, and Push (push events)
-    runs-on: {{RUNNER}}
-    if: github.event_name == 'push'
-    permissions:
-      contents: read
-      packages: write
-      pull-requests: read
-    env:
-      RELEASE_TAG: ${{ github.sha }}-{{SERVICE_NAME}}
-    outputs:
-      image_tag: ${{ env.RELEASE_TAG }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # rebuild rather than promote the PR candidate by digest: a push event has
-      # no reliable way back to the PR that produced it under squash/rebase
-      # merges, and a rebuild means the bits actually being pushed get scanned
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@{{ACTIONS_REF}}
-        with:
-          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
-{{EXTRA_BUILD_INPUTS}}
-
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@{{ACTIONS_REF}}
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
-          label: {{SERVICE_LABEL}} image
-          artifact-name: trivy-reports-release
-
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push rebuilt image
-        run: docker push "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG}"
-
-  update-helm-repo:
-    name: Update dev values.yaml in the Helm-charts repo
-    runs-on: {{RUNNER}}
-    needs: push-image
-    if: github.event_name == 'push'
-    steps:
-      - id: helm-app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.HELM_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}
-          owner: {{HELM_OWNER}}
-          repositories: {{HELM_REPO_NAME}}
-      - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@{{ACTIONS_REF}}
-        with:
-          yaml-path: {{HELM_KEY}}
-          helm-repo: {{HELM_REPO}}
-          values-file: dev/values.yaml
-          image-tag: ${{ needs.push-image.outputs.image_tag }}
-          component-label: {{SERVICE_NAME}}
-          helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
-          commit-user-name: github-actions[bot]
-          commit-user-email: 41898282+github-actions[bot]@users.noreply.github.com
+      helm-repo: {{HELM_REPO}}
+      helm-owner: {{HELM_OWNER}}
+      helm-repo-name: {{HELM_REPO_NAME}}
+      runner: {{RUNNER}}
+      helm-bot-client-id: ${{ vars.HELM_BOT_CLIENT_ID }}
+    secrets:
+      helm-bot-app-private-key: ${{ secrets.HELM_BOT_APP_PRIVATE_KEY }}

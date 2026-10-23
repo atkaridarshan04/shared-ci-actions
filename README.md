@@ -47,7 +47,8 @@ commits to the branch that triggered it.
 ```
 .github/
   actions/        composite actions — the building blocks
-  workflows/      CI, fleet automation, release tagging
+  workflows/      dev-pipeline.yml (reusable, called by every app repo),
+                  plus CI, fleet automation, release tagging
 docs/
   using/          adopting these pipelines in an app repo
   maintaining/    changing this repo
@@ -108,8 +109,12 @@ for why.
 
 - Third-party `uses:` are pinned to full commit SHAs, and `verify.sh`
   **enforces** it rather than trusting the convention.
-- Composite actions, not `workflow_call` — callers keep control of their
-  triggers, permissions, and job structure.
+- Composite actions hold the step-level logic. `dev-pipeline.yml` is a
+  `workflow_call` reusable workflow that stitches them into one canonical
+  job sequence — adopted once every app repo's rendered pipeline proved
+  structurally identical; `qa-release` stays a per-repo template until the
+  same holds for it. Callers still own their own triggers and permissions
+  ceiling.
 - [`CLAUDE.md`](CLAUDE.md) has the full set.
 
 > [!NOTE]

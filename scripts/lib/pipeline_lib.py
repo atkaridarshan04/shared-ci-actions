@@ -23,6 +23,12 @@ REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner", "actions_ref")
 # indentation of a `with:` key inside a step, in the templates
 WITH_INDENT = " " * 10
 
+# indentation of a `with:` key passed to a job-level `uses:` (a reusable
+# workflow call) rather than a step - one level shallower than a step's
+# `with:`. Used by the dev template, which calls the dev-pipeline.yml
+# reusable workflow directly as a job.
+JOB_WITH_INDENT = " " * 6
+
 # placeholders that carry their own indentation and expand to zero or more
 # whole lines. Every other placeholder is substituted inline, keeping the
 # template's indentation - so these must be listed, not detected by shape.
@@ -65,7 +71,7 @@ def list_repos():
     return list((doc.get("repos") or {}))
 
 
-def extra_build_inputs(config):
+def extra_build_inputs(config, indent=WITH_INDENT):
     """Render the optional build-candidate-image inputs, or nothing.
 
     Emitting `build-args: |` with an empty block below it is valid YAML but
@@ -75,7 +81,7 @@ def extra_build_inputs(config):
 
     target = (config.get("dockerfile_target") or "").strip()
     if target:
-        lines.append(f"{WITH_INDENT}dockerfile-target: {target}")
+        lines.append(f"{indent}dockerfile-target: {target}")
 
     build_args = [
         line.strip()
@@ -83,13 +89,13 @@ def extra_build_inputs(config):
         if line.strip()
     ]
     if build_args:
-        lines.append(f"{WITH_INDENT}build-args: |")
-        lines.extend(f"{WITH_INDENT}  {arg}" for arg in build_args)
+        lines.append(f"{indent}build-args: |")
+        lines.extend(f"{indent}  {arg}" for arg in build_args)
 
     return "\n".join(lines)
 
 
-def render(template_text, config):
+def render(template_text, config, stage=None):
     helm_repo = config["helm_repo"]
     if "/" not in helm_repo:
         print(
@@ -110,7 +116,12 @@ def render(template_text, config):
         "HELM_REPO": helm_repo,
         "HELM_OWNER": helm_owner,
         "HELM_REPO_NAME": helm_repo_name,
-        "EXTRA_BUILD_INPUTS": extra_build_inputs(config),
+        # dev calls the dev-pipeline.yml reusable workflow as a job (with: one
+        # level shallower than a step's); qa still inlines composite-action
+        # steps directly.
+        "EXTRA_BUILD_INPUTS": extra_build_inputs(
+            config, indent=JOB_WITH_INDENT if stage == "dev" else WITH_INDENT
+        ),
     }
 
     out_lines = []
@@ -130,7 +141,7 @@ def render(template_text, config):
 def cmd_render(repo, stage):
     config = load_config(repo)
     tmpl_name, _ = STAGE_FILES[stage]
-    print(render((TEMPLATES_DIR / tmpl_name).read_text(), config), end="")
+    print(render((TEMPLATES_DIR / tmpl_name).read_text(), config, stage=stage), end="")
 
 
 def cmd_filename(stage):

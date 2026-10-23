@@ -1,0 +1,208 @@
+name: Dev pipeline
+
+# Reusable workflow version of pipelines/templates/dev-pipeline.yml.tmpl.
+# Every real consumer's rendered pipeline turned out structurally identical -
+# same triggers, jobs, and permissions - with every actual difference already
+# a pipelines/repos.yaml field, so the per-repo copy is replaced by this one
+# canonical definition each caller invokes with those fields as inputs. See
+# CLAUDE.md.
+#
+# `uses:` can't contain an expression, so the composite-action refs below are
+# a static @v1, matching pipelines/repos.yaml's current actions_ref default.
+# Bumping it means editing this one file instead of every generated caller.
+#
+# Permissions aren't declared here - the calling job's own `permissions:`
+# block is the ceiling for every job below. A caller needs to grant the union
+# contents:read, packages:write, pull-requests:write to cover every internal
+# job.
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: Image tag suffix, component-name/component-label, e.g. "api".
+        required: true
+        type: string
+      service-label:
+        description: Human label in the Trivy comment header, e.g. "api".
+        required: true
+        type: string
+      helm-key:
+        description: Full yq path into the charts repo's values file, e.g. ".services.api.imageTag".
+        required: true
+        type: string
+      semgrep-configs:
+        description: Space-separated Semgrep config packs.
+        required: true
+        type: string
+      dockerfile-target:
+        description: Optional --target stage; leave default for none.
+        required: false
+        type: string
+        default: ""
+      build-args:
+        description: >-
+          Newline-separated KEY=VALUE lines, already resolved by the caller;
+          leave default for none.
+        required: false
+        type: string
+        default: ""
+      fail-on-findings:
+        description: >-
+          Passed straight through to trivy-scan-and-comment. Set to "false"
+          for report-only while onboarding a repo or triaging existing
+          findings; re-enable once the gate should actually block.
+        required: false
+        type: string
+        default: "true"
+      helm-repo:
+        description: Helm-charts repo holding the values file, as "owner/name".
+        required: true
+        type: string
+      helm-owner:
+        description: Owner portion of helm-repo, for the GitHub App token step.
+        required: true
+        type: string
+      helm-repo-name:
+        description: Repo-name portion of helm-repo, for the GitHub App token step.
+        required: true
+        type: string
+      runner:
+        description: Runner label for every job.
+        required: false
+        type: string
+        default: ubuntu-latest
+      helm-bot-client-id:
+        description: Caller's vars.HELM_BOT_CLIENT_ID.
+        required: true
+        type: string
+    secrets:
+      helm-bot-app-private-key:
+        description: Caller's secrets.HELM_BOT_APP_PRIVATE_KEY.
+        required: true
+
+concurrency:
+  group: ${{ inputs.service-name }}-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR paths must be lowercase; set this explicitly if your owner or repo
+  # name has uppercase letters.
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  semgrep:
+    name: Semgrep Scan
+    runs-on: ${{ inputs.runner }}
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/semgrep-scan-and-comment@v1
+        with:
+          semgrep-configs: >-
+            ${{ inputs.semgrep-configs }}
+
+  build-and-scan:
+    name: Build, Trivy Scan, and Push Candidate (PRs)
+    runs-on: ${{ inputs.runner }}
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    env:
+      CANDIDATE_TAG: pr-${{ github.event.pull_request.number }}-${{ inputs.service-name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # build and scan before logging in: nothing unscanned can reach the registry
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@v1
+        with:
+          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CANDIDATE_TAG }}
+          dockerfile-target: ${{ inputs.dockerfile-target }}
+          build-args: |
+            ${{ inputs.build-args }}
+
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@v1
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CANDIDATE_TAG }}
+          label: ${{ inputs.service-label }} image
+          fail-on-findings: ${{ inputs.fail-on-findings }}
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push scanned candidate image
+        run: docker push "${REGISTRY}/${IMAGE_NAME}:${CANDIDATE_TAG}"
+
+  push-image:
+    name: Rebuild, Trivy Scan, and Push (push events)
+    runs-on: ${{ inputs.runner }}
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: read
+    env:
+      RELEASE_TAG: ${{ github.sha }}-${{ inputs.service-name }}
+    outputs:
+      image_tag: ${{ env.RELEASE_TAG }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rebuild rather than promote the PR candidate by digest: a push event has
+      # no reliable way back to the PR that produced it under squash/rebase
+      # merges, and a rebuild means the bits actually being pushed get scanned
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@v1
+        with:
+          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+          dockerfile-target: ${{ inputs.dockerfile-target }}
+          build-args: |
+            ${{ inputs.build-args }}
+
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@v1
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+          label: ${{ inputs.service-label }} image
+          artifact-name: trivy-reports-release
+          fail-on-findings: ${{ inputs.fail-on-findings }}
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push rebuilt image
+        run: docker push "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG}"
+
+  update-helm-repo:
+    name: Update dev values.yaml in the Helm-charts repo
+    runs-on: ${{ inputs.runner }}
+    needs: push-image
+    if: github.event_name == 'push'
+    steps:
+      - id: helm-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.helm-bot-client-id }}
+          private-key: ${{ secrets.helm-bot-app-private-key }}
+          owner: ${{ inputs.helm-owner }}
+          repositories: ${{ inputs.helm-repo-name }}
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/update-helm-chart@v1
+        with:
+          yaml-path: ${{ inputs.helm-key }}
+          helm-repo: ${{ inputs.helm-repo }}
+          values-file: dev/values.yaml
+          image-tag: ${{ needs.push-image.outputs.image_tag }}
+          component-label: ${{ inputs.service-name }}
+          helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
+          commit-user-name: github-actions[bot]
+          commit-user-email: 41898282+github-actions[bot]@users.noreply.github.com
