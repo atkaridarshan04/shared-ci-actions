@@ -35,9 +35,6 @@ repos:
   # plus any key from `defaults` above, to override it for this repo.
 
   test-api:
-    # TEMP: testing the new qa-release.yml reusable workflow before it's
-    # released - v1 doesn't have that file yet. Remove once the release cuts.
-    actions_ref: main
     service_name: api
     service_label: api
     helm_key: .services.api.imageTag
