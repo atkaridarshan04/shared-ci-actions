@@ -5,21 +5,15 @@ editing conventions only.
 
 ## Conventions to apply on every edit
 
-- **Composite actions hold all step-level logic; `workflow_call` reusable
-  workflows are allowed for a whole pipeline stage, but only once that shape
-  is proven uniform.** `.github/actions/*/action.yml`
-  (`runs: using: composite`) is still what every job's steps call - a
-  reusable workflow under `.github/workflows/` just stitches those same
+- **Composite actions hold all step-level logic; `workflow_call` is allowed
+  for a whole stage only once that stage's shape is proven uniform.** A
+  reusable workflow under `.github/workflows/` stitches the same composite
   actions into one canonical job sequence instead of a per-repo rendered
-  copy. Only convert a stage to `workflow_call` after confirming, from the
-  real rendered pipeline in every `pipelines/repos.yaml` entry, that the
-  stage has zero structural divergence across repos - same triggers, jobs,
-  and permissions - with every actual difference already a `repos.yaml`
-  field. `dev-pipeline.yml` was converted on that basis (`test-api` is the
-  only real consumer and was migrated in the same change); `qa-release`
-  stays a per-repo template in `pipelines/templates/` until it gets the same
-  audit. Don't add a new reusable workflow on spec - divergence that hasn't
-  been checked for is divergence you can't rule out.
+  copy - only do this after confirming, from every `pipelines/repos.yaml`
+  entry's real rendered output, zero structural divergence (same triggers,
+  jobs, permissions) with every actual difference already a `repos.yaml`
+  field. `dev-pipeline.yml` was converted on that basis; `qa-release` stays a
+  per-repo template until it gets the same audit.
 - **Pin every third-party `uses:` to a full commit SHA with a `# vX.Y.Z`
   comment** — never a floating tag (`@v3`), never `@master`/`@main`. Resolve
   the SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. This

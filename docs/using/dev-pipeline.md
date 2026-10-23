@@ -15,17 +15,15 @@ quietly disabled in one, a fix lands in three, nobody knows which are current.
 ## Build on the PR, rebuild and rescan on merge
 
 The PR candidate and the deployed image are **two separate builds** from the
-same source. The PR builds and scans a candidate tag; merging to `develop`
-rebuilds and rescans from scratch, under the release tag. The alternative -
-retagging the PR's already-scanned candidate by digest, no rebuild - relies on
-resolving which PR produced a merge commit, which silently breaks under
-squash/rebase merges, and never actually re-validates the bits reaching the
-registry. Rebuilding costs one extra build+scan per merge; it has no PR to
-resolve, and it scans what's actually pushed.
+same source: the PR builds and scans a candidate tag, and merging to `develop`
+rebuilds and rescans from scratch under the release tag. The alternative —
+retagging the PR's candidate by digest, no rebuild — relies on resolving which
+PR produced a merge commit, which silently breaks under squash/rebase merges,
+and never re-validates the bits actually reaching the registry. One extra
+build+scan per merge buys both fixes.
 
-`build-candidate-image` also never pushes: build → scan → login → push, so an
-image failing its Trivy gate never reaches the registry - true for both the
-PR candidate and the merge rebuild.
+`build-candidate-image` never pushes: build → scan → login → push, so a
+failing Trivy gate blocks the registry either way.
 
 ## Flow
 

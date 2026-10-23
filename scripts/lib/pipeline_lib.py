@@ -23,10 +23,8 @@ REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner", "actions_ref")
 # indentation of a `with:` key inside a step, in the templates
 WITH_INDENT = " " * 10
 
-# indentation of a `with:` key passed to a job-level `uses:` (a reusable
-# workflow call) rather than a step - one level shallower than a step's
-# `with:`. Used by the dev template, which calls the dev-pipeline.yml
-# reusable workflow directly as a job.
+# same, but for a job-level `uses:` (reusable workflow call) - one level
+# shallower than a step's `with:`. Used by the dev template.
 JOB_WITH_INDENT = " " * 6
 
 # placeholders that carry their own indentation and expand to zero or more
@@ -116,9 +114,7 @@ def render(template_text, config, stage=None):
         "HELM_REPO": helm_repo,
         "HELM_OWNER": helm_owner,
         "HELM_REPO_NAME": helm_repo_name,
-        # dev calls the dev-pipeline.yml reusable workflow as a job (with: one
-        # level shallower than a step's); qa still inlines composite-action
-        # steps directly.
+        # dev's with: is a job's, qa's is a step's - see JOB_WITH_INDENT
         "EXTRA_BUILD_INPUTS": extra_build_inputs(
             config, indent=JOB_WITH_INDENT if stage == "dev" else WITH_INDENT
         ),

@@ -52,7 +52,7 @@ defaults:
   integration_branch: develop
   helm_repo: atkaridarshan04/test-helm-charts
   runner: ubuntu-latest
-  actions_ref: main
+  actions_ref: v1
 
 repos:
   my-service:
@@ -80,15 +80,14 @@ repos:
 | `integration_branch` | `develop` | both dev triggers, QA's PR base |
 | `helm_repo` | — | `helm-repo`, plus the App token's `owner`/`repositories` |
 | `runner` | `ubuntu-latest` | `runs-on` for every job |
-| `actions_ref` | `main` | which version of *this* repo pipelines call |
+| `actions_ref` | `v1` | which version of *this* repo pipelines call |
 
 `integration_branch` is one setting driving three places **because they must
 agree** — trigger on `main` while QA's values-bump PR targets `develop` and
 the bump lands on the wrong branch.
 
-`actions_ref` stays `main` until the first release, meaning every commit here
-reaches consumers immediately. Set it to `v1` after releasing — see
-[versioning](../maintaining/versioning.md).
+`actions_ref` tracks the latest 1.x release. A breaking change bumps it to
+`v2` by hand — see [versioning](../maintaining/versioning.md).
 
 ```yaml
 repos:

@@ -90,7 +90,7 @@ defaults:
   integration_branch: develop        # triggers, QA PR base
   helm_repo: owner/charts-repo       # also scopes the App token
   runner: ubuntu-latest
-  actions_ref: main                  # which version of THIS repo pipelines call
+  actions_ref: v1                    # which version of THIS repo pipelines call
 
 repos:
   my-service:
@@ -118,6 +118,7 @@ for why.
 - [`CLAUDE.md`](CLAUDE.md) has the full set.
 
 > [!NOTE]
-> `actions_ref` is `main`, so every commit here reaches consumers
-> immediately. After cutting `v1`, set it to `v1` — one value, no template
-> edits. See [versioning](docs/maintaining/versioning.md).
+> `actions_ref` is `v1`, tracking the latest 1.x release — one value,
+> no template edits, to move every pipeline to a new patch or minor. A
+> breaking change bumps it to `v2` by hand. See
+> [versioning](docs/maintaining/versioning.md).

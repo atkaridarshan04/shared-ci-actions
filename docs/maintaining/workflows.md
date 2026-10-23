@@ -1,7 +1,10 @@
 # Workflows in this repo
 
 These run *here*. The pipelines installed into app repos are a different
-thing — see [`docs/using/`](../using/dev-pipeline.md).
+thing — see [`docs/using/`](../using/dev-pipeline.md). `dev-pipeline.yml` also
+lives under `.github/workflows/`, but it's a `workflow_call` reusable
+workflow that runs in *caller* repos, not here — see
+[dev-pipeline](../using/dev-pipeline.md).
 
 | Workflow | Trigger | Purpose |
 |---|---|---|

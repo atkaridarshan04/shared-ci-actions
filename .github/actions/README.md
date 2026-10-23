@@ -2,8 +2,9 @@
 
 Composite actions for the dev and QA pipelines: Semgrep + Trivy scanning,
 build, push-candidate, rebuild-and-rescan-on-merge, Helm values update, and
-PR resolution. Every app repo's pipeline is a thin caller of these, so the
-pipeline is defined once instead of copy-pasted per repo.
+PR resolution. QA's pipeline calls these directly; dev's calls them through
+the `dev-pipeline.yml` reusable workflow. Either way, the pipeline is defined
+once instead of copy-pasted per repo.
 
 Not wrapped here: `docker/login-action` is already a single-line call, so
 wrapping it would buy nothing.
@@ -19,6 +20,9 @@ wrapping it would buy nothing.
 
 This README is the per-action usage reference (what input goes where); the
 docs above are the design rationale (why the pipeline is shaped this way).
+Dev's snippets below are excerpted from
+[`dev-pipeline.yml`](../workflows/dev-pipeline.yml) (this repo), not an app
+repo's own file — only QA still wires these actions into a per-repo template.
 
 ## Pipeline file naming
 
@@ -140,15 +144,12 @@ fails its Trivy gate never reaches the registry.
             APP_ENV=${{ vars.APP_ENV }}
 ```
 
-## Rebuilding and rescanning on merge (dev-pipeline's push job)
+## Rebuild + rescan on merge (dev-pipeline's push job)
 
 No separate action for this - the push job just calls `build-candidate-image`
 and `trivy-scan-and-comment` a second time, against a release tag instead of
-the PR's candidate tag. A push event has no reliable way back to the PR that
-produced it under squash/rebase merges, so rebuilding what's actually being
-pushed (rather than resolving a PR and retagging its candidate by digest)
-avoids needing that resolution at all, and means the exact bits reaching the
-registry get scanned.
+the PR's candidate tag. See [dev-pipeline](../../docs/using/dev-pipeline.md#build-on-the-pr-rebuild-and-rescan-on-merge)
+for why.
 
 ```yaml
   push-image:
@@ -185,8 +186,7 @@ registry get scanned.
 ```
 
 The release tag keeps the same `<sha>-<service>` format the old digest-promote
-produced - `update-helm-chart` and anything else parsing that tag sees no
-change, even though the mechanism behind it does.
+produced, so nothing parsing it breaks.
 
 ## update-helm-chart
 

@@ -1,20 +1,14 @@
 name: Dev pipeline
 
-# Reusable workflow version of pipelines/templates/dev-pipeline.yml.tmpl.
-# Every real consumer's rendered pipeline turned out structurally identical -
-# same triggers, jobs, and permissions - with every actual difference already
-# a pipelines/repos.yaml field, so the per-repo copy is replaced by this one
-# canonical definition each caller invokes with those fields as inputs. See
-# CLAUDE.md.
+# Replaces the per-repo dev-pipeline.yml.tmpl render - every consumer's
+# rendered pipeline was structurally identical, so the shape lives here once
+# instead of copied per repo. See CLAUDE.md.
 #
-# `uses:` can't contain an expression, so the composite-action refs below are
-# a static @v1, matching pipelines/repos.yaml's current actions_ref default.
-# Bumping it means editing this one file instead of every generated caller.
-#
-# Permissions aren't declared here - the calling job's own `permissions:`
-# block is the ceiling for every job below. A caller needs to grant the union
-# contents:read, packages:write, pull-requests:write to cover every internal
-# job.
+# `uses:` can't take an expression, so the composite-action refs below are a
+# static @v1 - bump them here to release, not in every generated caller. No
+# `permissions:` block here either: the calling job's is the ceiling for every
+# job below, so it needs to grant contents:read, packages:write,
+# pull-requests:write to cover all of them.
 
 on:
   workflow_call:

@@ -47,10 +47,9 @@ it doesn't exist, checkout fails before anything is committed.
 
 QA rebuilds from source and scans the rebuild, same as dev now does on merge
 (see [dev-pipeline](dev-pipeline.md#build-on-the-pr-rebuild-and-rescan-on-merge)).
-For QA specifically, that's doubly defensible: a `release-*` branch can carry
-cherry-picks that never went through a dev PR, so re-scanning is honest either
-way. The cost at both stages is the same — each is a *different build* of
-possibly identical source — don't read a matching tag as a matching digest.
+A `release-*` branch can carry cherry-picks that never went through a dev PR,
+so re-scanning is honest at both stages — each is a *different build* of
+possibly identical source. Don't read a matching tag as a matching digest.
 
 ## Credential
 
