@@ -77,21 +77,12 @@ Two that look safe and aren't:
 This is what makes pinning sustainable. Without it pins rot — you get the
 maintenance cost of pinning and none of the currency of floating.
 
-**Blind spot:** it reads `.github/workflows/` and composite `action.yml` files,
-not `pipelines/templates/*.tmpl`. `dev-pipeline.yml`'s own third-party pins
-(`docker/login-action`, `actions/create-github-app-token`, …) are covered
-since it lives in `.github/workflows/` — that's a side benefit of the
-`workflow_call` conversion. `qa-release.yml.tmpl`'s pins are still the blind
-spot: manual, with `verify.sh` only proving they stay *pinned*, not that
-they're *current*. When Dependabot bumps an action, check whether the qa
-template uses it too:
-
-```
-grep -rn 'uses:.*@' pipelines/templates/
-gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
-```
-
-This is the most likely thing here to be quietly wrong in six months.
+It reads `.github/workflows/` and composite `action.yml` files, not
+`pipelines/templates/*.tmpl` — which used to be a real blind spot before the
+`workflow_call` conversion, since both templates inlined third-party actions
+directly. Now neither template has a third-party `uses:` left (just the
+self-referencing call to `dev-pipeline.yml`/`qa-release.yml`, exempt from the
+pin check), so Dependabot covers everything that needs covering.
 
 ## Announcing a release
 

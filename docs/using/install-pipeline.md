@@ -36,11 +36,10 @@ It won't run against a repo with no config entry. Build args, Semgrep configs,
 and the values key can't be inferred by pattern-matching other repos — a
 guessed entry ships a broken pipeline into a real repo.
 
-`dev`'s rendered file is now a trigger block plus one job calling the
-[`dev-pipeline.yml` reusable workflow](../../.github/workflows/dev-pipeline.yml)
-with these fields as inputs — the full pipeline shape lives there, not in the
-per-repo file. `qa`'s rendered file is still the full inline pipeline; see
-[CLAUDE.md](../../CLAUDE.md) for why only `dev` has been converted so far.
+Both stages render a trigger block plus one job calling their reusable
+workflow ([`dev-pipeline.yml`](../../.github/workflows/dev-pipeline.yml),
+[`qa-release.yml`](../../.github/workflows/qa-release.yml)) with these fields
+as inputs — the full pipeline shape lives there, not in the per-repo file.
 
 ## Configuration
 
@@ -100,10 +99,9 @@ repos:
 
 ### Not configurable
 
-Fixed in the templates (`qa`) or the `dev-pipeline.yml` reusable workflow
-(`dev`) — edit [`pipelines/templates/`](../../pipelines/templates) or
-[`.github/workflows/dev-pipeline.yml`](../../.github/workflows/dev-pipeline.yml)
-to change them:
+Fixed in the reusable workflows — edit
+[`dev-pipeline.yml`](../../.github/workflows/dev-pipeline.yml) or
+[`qa-release.yml`](../../.github/workflows/qa-release.yml) to change them:
 
 | | Why |
 |---|---|

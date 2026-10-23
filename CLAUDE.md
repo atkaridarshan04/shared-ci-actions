@@ -12,8 +12,8 @@ editing conventions only.
   copy - only do this after confirming, from every `pipelines/repos.yaml`
   entry's real rendered output, zero structural divergence (same triggers,
   jobs, permissions) with every actual difference already a `repos.yaml`
-  field. `dev-pipeline.yml` was converted on that basis; `qa-release` stays a
-  per-repo template until it gets the same audit.
+  field. Both `dev-pipeline.yml` and `qa-release.yml` were converted on that
+  basis - apply the same audit before converting anything new.
 - **Pin every third-party `uses:` to a full commit SHA with a `# vX.Y.Z`
   comment** — never a floating tag (`@v3`), never `@master`/`@main`. Resolve
   the SHA with `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`. This

@@ -2,8 +2,8 @@
 
 Composite actions for the dev and QA pipelines: Semgrep + Trivy scanning,
 build, push-candidate, rebuild-and-rescan-on-merge, Helm values update, and
-PR resolution. QA's pipeline calls these directly; dev's calls them through
-the `dev-pipeline.yml` reusable workflow. Either way, the pipeline is defined
+PR resolution. Both pipelines call these through their own `workflow_call`
+reusable workflow (`dev-pipeline.yml`, `qa-release.yml`), so each is defined
 once instead of copy-pasted per repo.
 
 Not wrapped here: `docker/login-action` is already a single-line call, so
@@ -20,9 +20,10 @@ wrapping it would buy nothing.
 
 This README is the per-action usage reference (what input goes where); the
 docs above are the design rationale (why the pipeline is shaped this way).
-Dev's snippets below are excerpted from
-[`dev-pipeline.yml`](../workflows/dev-pipeline.yml) (this repo), not an app
-repo's own file — only QA still wires these actions into a per-repo template.
+Every snippet below is excerpted from
+[`dev-pipeline.yml`](../workflows/dev-pipeline.yml) or
+[`qa-release.yml`](../workflows/qa-release.yml) (this repo), not an app
+repo's own file.
 
 ## Pipeline file naming
 

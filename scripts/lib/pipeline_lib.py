@@ -20,12 +20,9 @@ STAGE_FILES = {
 
 REQUIRED_DEFAULTS = ("integration_branch", "helm_repo", "runner", "actions_ref")
 
-# indentation of a `with:` key inside a step, in the templates
-WITH_INDENT = " " * 10
-
-# same, but for a job-level `uses:` (reusable workflow call) - one level
-# shallower than a step's `with:`. Used by the dev template.
-JOB_WITH_INDENT = " " * 6
+# indentation of a `with:` key on a job-level `uses:` (both templates call
+# their reusable workflow as a single job)
+WITH_INDENT = " " * 6
 
 # placeholders that carry their own indentation and expand to zero or more
 # whole lines. Every other placeholder is substituted inline, keeping the
@@ -93,7 +90,7 @@ def extra_build_inputs(config, indent=WITH_INDENT):
     return "\n".join(lines)
 
 
-def render(template_text, config, stage=None):
+def render(template_text, config):
     helm_repo = config["helm_repo"]
     if "/" not in helm_repo:
         print(
@@ -114,10 +111,7 @@ def render(template_text, config, stage=None):
         "HELM_REPO": helm_repo,
         "HELM_OWNER": helm_owner,
         "HELM_REPO_NAME": helm_repo_name,
-        # dev's with: is a job's, qa's is a step's - see JOB_WITH_INDENT
-        "EXTRA_BUILD_INPUTS": extra_build_inputs(
-            config, indent=JOB_WITH_INDENT if stage == "dev" else WITH_INDENT
-        ),
+        "EXTRA_BUILD_INPUTS": extra_build_inputs(config),
     }
 
     out_lines = []
@@ -137,7 +131,7 @@ def render(template_text, config, stage=None):
 def cmd_render(repo, stage):
     config = load_config(repo)
     tmpl_name, _ = STAGE_FILES[stage]
-    print(render((TEMPLATES_DIR / tmpl_name).read_text(), config, stage=stage), end="")
+    print(render((TEMPLATES_DIR / tmpl_name).read_text(), config), end="")
 
 
 def cmd_filename(stage):

@@ -5,6 +5,11 @@ opens a PR in the charts repo bumping `qa/values.yaml`. Same actions as
 [dev](dev-pipeline.md), plus `resolve-pr-for-branch`, which only this stage
 needs.
 
+Like dev, the pipeline shape lives once as the
+[`qa-release.yml` reusable workflow](../../.github/workflows/qa-release.yml) —
+every app repo's `qa-release.yml` is a trigger block plus one `uses:` job
+calling it.
+
 ## Flow
 
 ```mermaid
