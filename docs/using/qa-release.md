@@ -25,7 +25,6 @@ flowchart TD
 | Image tag | `<commit-sha>-<service>` | `<release-branch>-<service>` |
 | Values file | `dev/values.yaml` | `qa/values.yaml` |
 | Update mode | `direct-commit` | `pr` |
-| Image origin | promoted by digest | rebuilt from the release branch |
 
 ## Why `resolve-pr-for-branch` runs first
 
@@ -44,13 +43,14 @@ environment change a human reviews before it reaches `develop`.
 The cost: the charts repo needs a branch matching the release branch name. If
 it doesn't exist, checkout fails before anything is committed.
 
-## Known tradeoff: QA rebuilds
+## Known tradeoff: every stage rebuilds
 
-QA doesn't reuse `promote-candidate-image` — it rebuilds from source and scans
-the rebuild. That's defensible: a `release-*` branch can carry cherry-picks
-that never went through a dev PR, so re-scanning is honest. But it means QA's
-image is a *different build* of possibly identical source — don't read a
-matching tag as a matching digest.
+QA rebuilds from source and scans the rebuild, same as dev now does on merge
+(see [dev-pipeline](dev-pipeline.md#build-on-the-pr-rebuild-and-rescan-on-merge)).
+For QA specifically, that's doubly defensible: a `release-*` branch can carry
+cherry-picks that never went through a dev PR, so re-scanning is honest either
+way. The cost at both stages is the same — each is a *different build* of
+possibly identical source — don't read a matching tag as a matching digest.
 
 ## Credential
 

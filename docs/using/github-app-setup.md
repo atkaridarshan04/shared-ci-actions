@@ -67,7 +67,7 @@ In every caller, immediately before `update-helm-chart`:
           yaml-path: .services.api.imageTag
           helm-repo: atkaridarshan04/test-helm-charts
           values-file: dev/values.yaml
-          image-tag: ${{ needs.promote-image.outputs.image_tag }}
+          image-tag: ${{ needs.push-image.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
           commit-user-name: github-actions[bot]

@@ -1,8 +1,8 @@
 # Shared CI actions
 
 Composite actions for the dev and QA pipelines: Semgrep + Trivy scanning,
-build, push-candidate, promote-on-merge, Helm values update, and PR
-resolution. Every app repo's pipeline is a thin caller of these, so the
+build, push-candidate, rebuild-and-rescan-on-merge, Helm values update, and
+PR resolution. Every app repo's pipeline is a thin caller of these, so the
 pipeline is defined once instead of copy-pasted per repo.
 
 Not wrapped here: `docker/login-action` is already a single-line call, so
@@ -25,7 +25,7 @@ docs above are the design rationale (why the pipeline is shaped this way).
 Every app repo's `.github/workflows/` uses these two names, one per stage:
 
 - **`dev-pipeline.yml`** - PR + push to `develop` (Semgrep, build, Trivy,
-  PR-comment, promote-by-digest on merge, values update)
+  PR-comment, rebuild + rescan on merge, values update)
 - **`qa-release.yml`** - push to `release-*` (build, Trivy, push, values
   update via PR to `develop`)
 
@@ -140,37 +140,53 @@ fails its Trivy gate never reaches the registry.
             APP_ENV=${{ vars.APP_ENV }}
 ```
 
-## promote-candidate-image
+## Rebuilding and rescanning on merge (dev-pipeline's push job)
 
-Run in a `push`-triggered job, after registry login. Retags the already-scanned
-candidate by digest - no rebuild.
+No separate action for this - the push job just calls `build-candidate-image`
+and `trivy-scan-and-comment` a second time, against a release tag instead of
+the PR's candidate tag. A push event has no reliable way back to the PR that
+produced it under squash/rebase merges, so rebuilding what's actually being
+pushed (rather than resolving a PR and retagging its candidate by digest)
+avoids needing that resolution at all, and means the exact bits reaching the
+registry get scanned.
 
 ```yaml
-  promote-image:
+  push-image:
     if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write
       pull-requests: read
+    env:
+      RELEASE_TAG: ${{ github.sha }}-api
     outputs:
-      image_tag: ${{ steps.promote.outputs.release-tag }}
+      image_tag: ${{ env.RELEASE_TAG }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@main
+        with:
+          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@main
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+          label: api image
+          artifact-name: trivy-reports-release
+
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with: { driver: docker }
-      - id: promote
-        uses: atkaridarshan04/shared-ci-actions/.github/actions/promote-candidate-image@main
-        with:
-          component-name: api
-          image-repository: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Push rebuilt image
+        run: docker push "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG}"
 ```
 
-`base-branch` defaults to `develop` - set it if your integration branch has
-another name, otherwise no merged PR will be found and the job fails closed.
+The release tag keeps the same `<sha>-<service>` format the old digest-promote
+produced - `update-helm-chart` and anything else parsing that tag sees no
+change, even though the mechanism behind it does.
 
 ## update-helm-chart
 
@@ -185,7 +201,7 @@ one-time setup in
 
 ```yaml
   update-helm-repo:
-    needs: promote-image
+    needs: push-image
     steps:
       - id: helm-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -199,7 +215,7 @@ one-time setup in
           yaml-path: .services.api.imageTag
           helm-repo: atkaridarshan04/test-helm-charts
           values-file: dev/values.yaml
-          image-tag: ${{ needs.promote-image.outputs.image_tag }}
+          image-tag: ${{ needs.push-image.outputs.image_tag }}
           component-label: api
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
           commit-user-name: github-actions[bot]

@@ -71,14 +71,14 @@ repos:
 
 | Field | Default | Drives |
 |---|---|---|
-| `integration_branch` | `develop` | both dev triggers, QA's PR base, `base-branch` on `promote-candidate-image` |
+| `integration_branch` | `develop` | both dev triggers, QA's PR base |
 | `helm_repo` | — | `helm-repo`, plus the App token's `owner`/`repositories` |
 | `runner` | `ubuntu-latest` | `runs-on` for every job |
 | `actions_ref` | `main` | which version of *this* repo pipelines call |
 
-`integration_branch` is one setting driving four places **because they must
-agree** — trigger on `main` while `promote-candidate-image` looks for PRs
-against `develop` and every merge fails with "nothing scanned to promote".
+`integration_branch` is one setting driving three places **because they must
+agree** — trigger on `main` while QA's values-bump PR targets `develop` and
+the bump lands on the wrong branch.
 
 `actions_ref` stays `main` until the first release, meaning every commit here
 reaches consumers immediately. Set it to `v1` after releasing — see

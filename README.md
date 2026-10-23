@@ -6,8 +6,8 @@ Reusable GitHub Actions building blocks for a two-stage container pipeline —
 **dev** and **QA** — plus the tooling to roll it out to app repos without
 copy-pasting it into each one.
 
-**Build once. Scan before push. Promote by digest.** No image is ever rebuilt
-between "scanned" and "deployed."
+**Scan before push. Rebuild and rescan on merge.** Nothing unscanned ever
+reaches the registry, at either stage.
 
 ---
 
@@ -34,7 +34,7 @@ Run `./scripts/verify.sh` before pushing changes here — it's exactly what CI r
 
 | File | Trigger | What it does |
 |:--|:--|:--|
-| `dev-pipeline.yml` | PR + push to `develop` | Semgrep → build → Trivy → PR comments. On merge: promote by digest, commit `dev/values.yaml` |
+| `dev-pipeline.yml` | PR + push to `develop` | Semgrep → build → Trivy → PR comments. On merge: rebuild + rescan, commit `dev/values.yaml` |
 | `qa-release.yml` | push to `release-*` | Build → Trivy → push, then open a PR bumping `qa/values.yaml` |
 
 Deploy config lives in a **separate Helm-charts repo**, so the pipeline never
@@ -63,7 +63,7 @@ scripts/          verify this repo; install a pipeline into another
 
 | | |
 |:--|:--|
-| [dev-pipeline](docs/using/dev-pipeline.md) | Build once, promote by digest. Tagging, failure modes |
+| [dev-pipeline](docs/using/dev-pipeline.md) | Build on the PR, rebuild + rescan on merge. Tagging, failure modes |
 | [qa-release](docs/using/qa-release.md) | Release branches, and why QA lands through a PR |
 | [security-scanning](docs/using/security-scanning.md) | **When a scan blocks your PR** — suppression mechanics + policy |
 | [install-pipeline](docs/using/install-pipeline.md) | Installing a stage, and the full config reference |
@@ -86,7 +86,7 @@ repo, `repos` holds one entry each, and any repo can override any default.
 
 ```yaml
 defaults:
-  integration_branch: develop        # triggers, PR base, promote's base-branch
+  integration_branch: develop        # triggers, QA PR base
   helm_repo: owner/charts-repo       # also scopes the App token
   runner: ubuntu-latest
   actions_ref: main                  # which version of THIS repo pipelines call

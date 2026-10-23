@@ -69,36 +69,48 @@ jobs:
       - name: Push scanned candidate image
         run: docker push "${REGISTRY}/${IMAGE_NAME}:${CANDIDATE_TAG}"
 
-  promote-image:
-    name: Promote Scanned Candidate (push events)
+  push-image:
+    name: Rebuild, Trivy Scan, and Push (push events)
     runs-on: {{RUNNER}}
     if: github.event_name == 'push'
     permissions:
       contents: read
       packages: write
       pull-requests: read
+    env:
+      RELEASE_TAG: ${{ github.sha }}-{{SERVICE_NAME}}
     outputs:
-      image_tag: ${{ steps.promote.outputs.release-tag }}
+      image_tag: ${{ env.RELEASE_TAG }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rebuild rather than promote the PR candidate by digest: a push event has
+      # no reliable way back to the PR that produced it under squash/rebase
+      # merges, and a rebuild means the bits actually being pushed get scanned
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@{{ACTIONS_REF}}
+        with:
+          image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+{{EXTRA_BUILD_INPUTS}}
+
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@{{ACTIONS_REF}}
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+          label: {{SERVICE_LABEL}} image
+          artifact-name: trivy-reports-release
+
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with:
-          driver: docker
-      - id: promote
-        uses: atkaridarshan04/shared-ci-actions/.github/actions/promote-candidate-image@{{ACTIONS_REF}}
-        with:
-          component-name: {{SERVICE_NAME}}
-          image-repository: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          base-branch: {{INTEGRATION_BRANCH}}
+
+      - name: Push rebuilt image
+        run: docker push "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG}"
 
   update-helm-repo:
     name: Update dev values.yaml in the Helm-charts repo
     runs-on: {{RUNNER}}
-    needs: promote-image
+    needs: push-image
     if: github.event_name == 'push'
     steps:
       - id: helm-app-token
@@ -113,7 +125,7 @@ jobs:
           yaml-path: {{HELM_KEY}}
           helm-repo: {{HELM_REPO}}
           values-file: dev/values.yaml
-          image-tag: ${{ needs.promote-image.outputs.image_tag }}
+          image-tag: ${{ needs.push-image.outputs.image_tag }}
           component-label: {{SERVICE_NAME}}
           helm-repo-token: ${{ steps.helm-app-token.outputs.token }}
           commit-user-name: github-actions[bot]

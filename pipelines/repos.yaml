@@ -13,8 +13,8 @@
 #   values paths    dev/values.yaml and qa/values.yaml in the charts repo
 
 defaults:
-  # branch PRs target and merges land on - drives both dev triggers, the QA
-  # values PR base, and which PR promote-candidate-image looks for
+  # branch PRs target and merges land on - drives both dev triggers and the
+  # QA values PR base
   integration_branch: develop
   # charts repo holding the values files, as "owner/name"
   helm_repo: atkaridarshan04/test-helm-charts

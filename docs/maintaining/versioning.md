@@ -61,7 +61,7 @@ Two that look safe and aren't:
 
 - **Tightening a gate** — a stricter scan breaks builds that passed
   yesterday. Technically compatible, practically major.
-- **Changing a tag format** — `promote-candidate-image` emits
+- **Changing a tag format** — dev-pipeline's push job emits
   `<sha>-<component>`; anything parsing that breaks.
 
 ## Dependabot
