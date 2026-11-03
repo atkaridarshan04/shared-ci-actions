@@ -1,6 +1,6 @@
 # Shared CI actions
 
-Composite actions for the dev and QA pipelines: Semgrep + Trivy scanning,
+Composite actions for the dev and QA pipelines: Semgrep, Gitleaks and Trivy scanning,
 build, push-candidate, rebuild-and-rescan-on-merge, Helm values update, and
 PR resolution. Both pipelines call these through their own `workflow_call`
 reusable workflow (`dev-pipeline.yml`, `qa-release.yml`), so each is defined
@@ -29,9 +29,9 @@ repo's own file.
 
 Every app repo's `.github/workflows/` uses these two names, one per stage:
 
-- **`dev-pipeline.yml`** - PR + push to `develop` (Semgrep, build, Trivy,
+- **`dev-pipeline.yml`** - PR + push to `develop` (Semgrep, Gitleaks, dependency scan, build, Trivy,
   PR-comment, rebuild + rescan on merge, values update)
-- **`qa-release.yml`** - push to `release-*` (build, Trivy, push, values
+- **`qa-release.yml`** - push to `release-*` (Semgrep, Gitleaks, dependency scan, build, Trivy, push, values
   update via PR to `develop`)
 
 `scripts/install-pipeline.sh` renders and installs these from
@@ -58,14 +58,12 @@ have logged in before pushing. The templates target GHCR
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: atkaridarshan04/shared-ci-actions/.github/actions/semgrep-scan-and-comment@main
         with:
-          semgrep-configs: >-
-            p/python p/fastapi p/dockerfile p/cwe-top-25 p/owasp-top-ten
-            p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection
+          semgrep-configs: p/python p/fastapi p/sql-injection
 ```
 
 | Input | Default | Notes |
 |---|---|---|
-| `semgrep-configs` | — | required; match the repo's stack |
+| `semgrep-configs` | empty | extra packs for the stack; the baseline always runs |
 | `semgrep-version` | `1.178.0` | pinned on purpose — an unpinned install lets a new Semgrep release fail builds that passed yesterday |
 | `fail-on-severity` | `ERROR` | `ERROR`, `WARNING`, or `INFO`. Lower findings are reported, not blocking. No value disables the gate. |
 | `pr-number` | auto | only needed on non-`pull_request` events |
@@ -73,7 +71,20 @@ have logged in before pushing. The templates target GHCR
 The severity gate runs *after* the report upload and PR comment, so a failing
 build still leaves the reviewer the full report.
 
+## gitleaks-scan
+
+Takes no inputs. On a PR it scans the commits the PR adds, which needs
+`actions/checkout` with `fetch-depth: 0`. Off a PR it scans the checked-out
+tree.
+
+```yaml
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/gitleaks-scan@main
+```
+
 ## trivy-scan-and-comment
+
+`scan-type: fs` scans the checked-out repo's manifests instead (needs a prior
+checkout, no `image-ref`). Give it its own `artifact-name` and `comment-header`.
 
 ```yaml
       - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@main

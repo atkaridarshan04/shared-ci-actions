@@ -1,11 +1,13 @@
 # Security scanning: what blocks, and what to do
 
-Two gates run on every PR into `develop`. Both **fail the build** by default.
+Four gates run on every PR into `develop`, and the three source scans (Semgrep, Gitleaks, dependencies) also run before the QA build. All **fail the build** by default, and the image is built and pushed only if they pass.
 
 | Gate | Scans | Blocks on | Can it be disabled? |
 |---|---|---|---|
 | Semgrep | source code | `ERROR` by default (`fail-on-severity`) | **No** — the input takes severities only, never "off" |
-| Trivy | the built image | `HIGH`/`CRITICAL`, fixable only | Yes — `fail-on-findings: false` |
+| Gitleaks | every commit the PR adds, for committed secrets | any finding | **No** |
+| Trivy (dependencies) | the repo's manifests and lockfiles | `HIGH`/`CRITICAL`, fixable only | Yes — `fail-on-findings: false` |
+| Trivy (image) | the built image | `HIGH`/`CRITICAL`, fixable only | Yes — `fail-on-findings: false` |
 
 Semgrep's threshold is tunable but the gate itself isn't removable: `fail-on-severity`
 accepts `ERROR`, `WARNING`, or `INFO` and nothing else. Findings below the
@@ -75,20 +77,22 @@ raising `fail-on-severity`, which still blocks at the level you name.
 
 ## Where each gate runs
 
-| | Semgrep | Trivy |
-|---|---|---|
-| dev PR | yes | yes, on the candidate image |
-| dev merge | no | no — promoted by digest, already scanned |
-| QA (`release-*`) | no | yes, on the release build |
+| | Semgrep | Gitleaks | Trivy deps | Trivy image |
+|---|---|---|---|---|
+| dev PR | yes | PR's commits | yes | yes, on the candidate |
+| dev merge | no | no | no | yes, on the rebuild |
+| QA (`release-*`) | yes | tree only | yes | yes, on the release build |
 
-QA has no Semgrep job. A `release-*` branch carrying cherry-picks that never
-went through a dev PR won't be source-scanned — worth knowing if you
-cherry-pick into releases.
+Off a PR there is no commit range, so Gitleaks scans the checked-out tree, not history, and nothing is commented on a PR.
+
+## Secrets
+
+Gitleaks scans every commit the PR adds, so a secret committed and then deleted still fails. **A leaked secret is already compromised - rotate it first**, then rewrite the branch to drop the commit.
+
+Rules come from a shared baseline, [`gitleaks.toml`](../../.github/actions/gitleaks-scan/gitleaks.toml): gitleaks' built-ins plus any org-wide additions. For a false positive, add its fingerprint to `.gitleaksignore` with a reason. A repo `.gitleaks.toml` replaces the baseline (start it with `[extend]` / `useDefault = true`), so prefer `.gitleaksignore`.
 
 ## Tuning Semgrep
 
-`semgrep_configs` is per-repo in
-[`pipelines/repos.yaml`](../../pipelines/repos.yaml) and should match the
-stack. `p/react` against a Python service costs time and finds nothing;
-omitting `p/sql-injection` from a service with a database is how a real
-finding gets missed.
+Every repo runs a baseline in the action: `p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets`. `semgrep_configs` in [`pipelines/repos.yaml`](../../pipelines/repos.yaml) adds the stack's extra packs (`p/python p/fastapi`, `p/react`). Match the stack: omitting `p/sql-injection` from a DB-backed service risks missing a real finding.
+
+The action skips `github-actions-mutable-action-tag`, which warns on this repo's own `@v1` refs. It also no longer warns on third-party tag pins in a consumer's own workflows.

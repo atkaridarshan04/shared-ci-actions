@@ -31,7 +31,11 @@ failing Trivy gate blocks the registry either way.
 flowchart TD
     subgraph PR["Pull request → develop"]
         A[Open / update PR] --> B["semgrep-scan-and-comment<br/>blocking"]
-        A --> C["build-candidate-image<br/>pr-&lt;number&gt;-&lt;service&gt;<br/>local only"]
+        A --> B2["gitleaks-scan<br/>blocking"]
+        A --> B3["trivy-scan-and-comment<br/>scan-type: fs"]
+        B --> C["build-candidate-image<br/>pr-&lt;number&gt;-&lt;service&gt;<br/>local only"]
+        B2 --> C
+        B3 --> C
         C --> D["trivy-scan-and-comment<br/>HIGH/CRITICAL, fixable<br/>blocking"]
         D --> E["docker login + push"]
     end
@@ -45,9 +49,13 @@ flowchart TD
 
 ## Actions, in order
 
+The build waits for the three PR scans to pass.
+
 | Step | Action | Notes |
 |---|---|---|
-| SAST | `semgrep-scan-and-comment` | configs matched to the repo's stack |
+| SAST | `semgrep-scan-and-comment` | baseline packs plus the stack's extras |
+| Secrets | `gitleaks-scan` | PR only, always blocks |
+| Dependencies | `trivy-scan-and-comment` | PR only, `scan-type: fs` |
 | Build | `build-candidate-image` | does not push |
 | Container scan | `trivy-scan-and-comment` | blocking by default — this is the gate |
 | Rebuild | `build-candidate-image` + `trivy-scan-and-comment` (again) | `push` only; rebuilds and rescans rather than promoting the PR candidate by digest |
@@ -67,8 +75,8 @@ flowchart TD
 The push job has no dependency on a PR having existed at all — it just
 rebuilds and rescans whatever is on `develop` after the push. A direct push
 (bypassing a PR) still gets built, Trivy-scanned, and deployed if it passes;
-it just never went through Semgrep or a PR comment, since both are
-`pull_request`-only. That's a real gap for a repo that wants SAST enforced on
+it just never went through the source scans or a PR comment, since
+they are `pull_request`-only. That's a real gap for a repo that wants SAST enforced on
 every change reaching `develop` — branch protection requiring the PR workflow
 is what closes it, not this pipeline.
 
