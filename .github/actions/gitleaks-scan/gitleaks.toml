@@ -1,0 +1,5 @@
+title = "mvue-ai baseline"
+
+[extend]
+useDefault = true
+# org-wide rules and allowlists go below
