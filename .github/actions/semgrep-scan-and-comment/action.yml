@@ -2,8 +2,11 @@ name: Semgrep scan and PR comment
 description: Run Semgrep, upload the report, and post/update a PR comment with the results.
 inputs:
   semgrep-configs:
-    description: Space-separated Semgrep config packs, e.g. "p/python p/fastapi p/dockerfile".
-    required: true
+    description: >
+      Extra packs for the caller's stack, e.g. "p/python p/fastapi". The
+      baseline packs (see the scan step) always run.
+    required: false
+    default: ""
   semgrep-version:
     description: >
       Semgrep release to install. Pinned by default: an unpinned install
@@ -62,11 +65,20 @@ runs:
             ;;
         esac
 
+        # baseline plus the caller's extras, each pack once
+        BASELINE="p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
         CONFIG_ARGS=()
-        for c in $SEMGREP_CONFIGS; do
+        SEEN=" "
+        for c in $BASELINE $SEMGREP_CONFIGS; do
+          case "$SEEN" in *" $c "*) continue ;; esac
+          SEEN="$SEEN$c "
           CONFIG_ARGS+=(--config "$c")
         done
-        semgrep scan "${CONFIG_ARGS[@]}" --json --output semgrep-report.json .
+
+        # skipped: flags our own @v1 refs, which are meant to move
+        semgrep scan "${CONFIG_ARGS[@]}" \
+          --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag \
+          --json --output semgrep-report.json .
 
     - name: Format Semgrep report (human readable)
       if: always()
