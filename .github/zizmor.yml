@@ -1,0 +1,11 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        atkaridarshan04/shared-ci-actions/*: any
+        "*": hash-pin
+  github-app:
+    # tokens aren't scoped with permission-* yet; remove each ignore once scoped
+    ignore:
+      - dev-pipeline.yml
+      - qa-release.yml
