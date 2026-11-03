@@ -16,6 +16,8 @@ jobs:
       service-name: {{SERVICE_NAME}}
       service-label: {{SERVICE_LABEL}}
       helm-key: {{HELM_KEY}}
+      semgrep-configs: >-
+        {{SEMGREP_CONFIGS}}
 {{EXTRA_BUILD_INPUTS}}
       integration-branch: {{INTEGRATION_BRANCH}}
       helm-repo: {{HELM_REPO}}
