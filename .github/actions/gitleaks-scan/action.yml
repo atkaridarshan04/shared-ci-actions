@@ -6,6 +6,7 @@ runs:
     # on a PR, scans every commit it adds; on a push or dispatch there is no
     # range, so it scans the checked-out tree instead of all of history
     - name: Run gitleaks
+      id: gitleaks
       shell: bash
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -40,3 +41,16 @@ runs:
         else
           "$TOOL_DIR/gitleaks" dir --redact --verbose "${CONFIG_ARGS[@]}" .
         fi
+
+    - name: Add gitleaks result to job summary
+      if: always()
+      shell: bash
+      env:
+        OUTCOME: ${{ steps.gitleaks.outcome }}
+      run: |
+        case "$OUTCOME" in
+          success) RESULT="No secrets found." ;;
+          failure) RESULT="Secrets found. See the step log (values are redacted), then rotate them." ;;
+          *)       RESULT="Scan did not complete ($OUTCOME)." ;;
+        esac
+        printf '### Gitleaks\n\n%s\n' "$RESULT" >> "$GITHUB_STEP_SUMMARY"

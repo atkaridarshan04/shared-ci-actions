@@ -20,6 +20,7 @@ runs:
   using: composite
   steps:
     - name: Build Docker image
+      id: build
       shell: bash
       env:
         DOCKER_BUILDKIT: "1"
@@ -40,3 +41,17 @@ runs:
 
         # ${ARGS[@]+...} so an empty ARGS is not an unbound variable under set -u
         docker build ${ARGS[@]+"${ARGS[@]}"} -t "$IMAGE_TAG" "$BUILD_CONTEXT"
+
+    - name: Add build result to job summary
+      if: always()
+      shell: bash
+      env:
+        OUTCOME: ${{ steps.build.outcome }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+      run: |
+        if [ "$OUTCOME" = "success" ]; then
+          SIZE=$(docker image inspect --format '{{.Size}}' "$IMAGE_TAG" | awk '{printf "%.0f MB", $1/1000000}')
+          printf '### Docker build\n\nBuilt `%s` (%s).\n' "$IMAGE_TAG" "$SIZE" >> "$GITHUB_STEP_SUMMARY"
+        else
+          printf '### Docker build\n\nBuild of `%s` did not complete (%s). See the step log.\n' "$IMAGE_TAG" "$OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+        fi

@@ -195,6 +195,11 @@ runs:
           semgrep-report.json
         if-no-files-found: warn
 
+    - name: Add Semgrep results to job summary
+      if: always()
+      shell: bash
+      run: cat semgrep-comment.md >> "$GITHUB_STEP_SUMMARY"
+
     - name: Comment Semgrep results on PR
       if: always() && (github.event_name == 'pull_request' || inputs.pr-number != '')
       uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5

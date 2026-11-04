@@ -122,7 +122,7 @@ jobs:
           fail-on-findings: ${{ inputs.fail-on-findings }}
 
   build-scan-push:
-    name: Build, Trivy Scan, and Push
+    name: Build, Scan and Push
     runs-on: ${{ inputs.runner }}
     needs: [semgrep, secret-scan, dependency-scan]
     permissions:
@@ -163,7 +163,7 @@ jobs:
         run: docker push "${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
   update-helm-repo:
-    name: Update QA values.yaml (PR to ${{ inputs.integration-branch }})
+    name: Update Helm values (PR)
     runs-on: ${{ inputs.runner }}
     needs: build-scan-push
     steps:
