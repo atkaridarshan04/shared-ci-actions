@@ -14,16 +14,16 @@ quietly disabled in one, a fix lands in three, nobody knows which are current.
 
 ## Build on the PR, rebuild and rescan on merge
 
-The PR candidate and the deployed image are **two separate builds** from the
-same source: the PR builds and scans a candidate tag, and merging to `develop`
-rebuilds and rescans from scratch under the release tag. The alternative —
-retagging the PR's candidate by digest, no rebuild — relies on resolving which
-PR produced a merge commit, which silently breaks under squash/rebase merges,
-and never re-validates the bits actually reaching the registry. One extra
-build+scan per merge buys both fixes.
+The PR build only checks that the image builds and scans clean; nothing is
+pushed. Merging to `develop` rebuilds and rescans from scratch under the
+release tag, and that build pushes. The alternative — pushing a PR image and
+retagging it by digest on merge — relies on resolving which PR produced a
+merge commit, which silently breaks under squash/rebase merges, and never
+re-validates the bits actually reaching the registry. One extra build+scan per
+merge buys both fixes.
 
-`build-candidate-image` never pushes: build → scan → login → push, so a
-failing Trivy gate blocks the registry either way.
+`build-candidate-image` never pushes. The push job runs build → scan → login →
+push, so a failing Trivy gate blocks the registry.
 
 ## Flow
 
@@ -37,10 +37,9 @@ flowchart TD
         B2 --> C
         B3 --> C
         C --> D["trivy-scan-and-comment<br/>HIGH/CRITICAL, fixable<br/>blocking"]
-        D --> E["docker login + push"]
     end
 
-    E --> M{push to develop}
+    D --> M{push to develop}
     M --> F1["build-candidate-image<br/>&lt;sha&gt;-&lt;service&gt;<br/>REBUILD"]
     F1 --> F2["trivy-scan-and-comment<br/>re-scan, artifact-name: trivy-reports-release"]
     F2 --> F3["docker login + push"]
@@ -49,16 +48,16 @@ flowchart TD
 
 ## Actions, in order
 
-The build waits for the three PR scans to pass.
+The build waits for the three PR scans to pass. A PR never pushes an image.
 
 | Step | Action | Notes |
 |---|---|---|
 | SAST | `semgrep-scan-and-comment` | baseline packs plus the stack's extras |
 | Secrets | `gitleaks-scan` | PR only, always blocks |
 | Dependencies | `trivy-scan-and-comment` | PR only, `scan-type: fs` |
-| Build | `build-candidate-image` | does not push |
+| Build | `build-candidate-image` | local tag, not pushed |
 | Container scan | `trivy-scan-and-comment` | blocking by default — this is the gate |
-| Rebuild | `build-candidate-image` + `trivy-scan-and-comment` (again) | `push` only; rebuilds and rescans rather than promoting the PR candidate by digest |
+| Rebuild | `build-candidate-image` + `trivy-scan-and-comment` (again) | `push` only; rebuilds and rescans, then pushes, rather than promoting a PR image by digest |
 | Values bump | `update-helm-chart` | direct commit to the charts repo |
 
 `validate-branch-jira` exists but is opt-in — no template wires it in.
@@ -67,7 +66,7 @@ The build waits for the three PR scans to pass.
 
 | Tag | Format | Notes |
 |---|---|---|
-| Candidate | `pr-<number>-<service>` | stable across force-pushes; not for deploying |
+| PR build | `pr-<number>-<service>` | local tag, never pushed |
 | Release | `<commit-sha>-<service>` | the commit that landed on `develop`; what gets deployed |
 
 ## What a direct push to `develop` does

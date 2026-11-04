@@ -18,7 +18,7 @@ can't start failing your builds without someone here bumping it deliberately.
 Both post a sticky PR comment that updates in place, and upload the full
 report as an artifact (`semgrep-report`, `trivy-reports`). Comments truncate
 at 60k characters; artifacts don't. Both run `if: always()`, so you get the
-report even when the gate fails.
+report even when the gate fails. Gitleaks, the scans and the Docker build also write a short result to the run summary, which is where to look on QA, where there is no PR comment.
 
 **A clean Trivy run isn't "no vulnerabilities"** — `ignore-unfixed` means
 "nothing you can currently fix". Blocking on CVEs with no published fix just
@@ -79,7 +79,7 @@ raising `fail-on-severity`, which still blocks at the level you name.
 
 | | Semgrep | Gitleaks | Trivy deps | Trivy image |
 |---|---|---|---|---|
-| dev PR | yes | PR's commits | yes | yes, on the candidate |
+| dev PR | yes | PR's commits | yes | yes, on the PR build |
 | dev merge | no | no | no | yes, on the rebuild |
 | QA (`release-*`) | yes | tree only | yes | yes, on the release build |
 
