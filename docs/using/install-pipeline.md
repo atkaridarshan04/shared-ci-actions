@@ -58,7 +58,7 @@ repos:
     service_name: api
     service_label: api
     helm_key: .services.api.imageTag
-    semgrep_configs: "p/python p/dockerfile p/secrets"
+    semgrep_configs: "p/python p/fastapi"
 ```
 
 ### Per-repo fields
@@ -68,7 +68,7 @@ repos:
 | `service_name` | yes | image tag suffix, `component-name`, `component-label` |
 | `service_label` | yes | label in the Trivy comment header |
 | `helm_key` | yes | yq path into the charts repo's values file |
-| `semgrep_configs` | yes | space-separated packs, matched to the stack |
+| `semgrep_configs` | no | extra Semgrep packs for the stack, added to the baseline |
 | `dockerfile_target` | no | `--target` stage; omitted entirely when unset |
 | `build_args` | no | newline-separated `KEY=VALUE`; omitted when unset |
 

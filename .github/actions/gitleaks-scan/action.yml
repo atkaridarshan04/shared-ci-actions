@@ -1,0 +1,42 @@
+name: Gitleaks secret scan
+description: Scan the commits a pull request adds for committed secrets, and fail if any are found.
+runs:
+  using: composite
+  steps:
+    # on a PR, scans every commit it adds; on a push or dispatch there is no
+    # range, so it scans the checked-out tree instead of all of history
+    - name: Run gitleaks
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+
+        # pinned; bump the version and both checksums together
+        GITLEAKS_VERSION=8.30.1
+        case "$(uname -m)" in
+          x86_64)  ARCH=x64;   SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+          aarch64) ARCH=arm64; SHA256=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080 ;;
+          *) echo "::error::unsupported runner architecture $(uname -m)"; exit 1 ;;
+        esac
+
+        TARBALL="gitleaks_${GITLEAKS_VERSION}_linux_${ARCH}.tar.gz"
+        TOOL_DIR="$(mktemp -d "${RUNNER_TEMP}/gitleaks-XXXXXX")"
+        curl -fsSL -o "$TOOL_DIR/$TARBALL" \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${TARBALL}"
+        echo "$SHA256  $TOOL_DIR/$TARBALL" | sha256sum -c -
+        tar xz -C "$TOOL_DIR" -f "$TOOL_DIR/$TARBALL" gitleaks
+
+        # a repo's own .gitleaks.toml replaces the shared baseline
+        CONFIG_ARGS=()
+        if [ ! -f .gitleaks.toml ]; then
+          CONFIG_ARGS=(--config "${GITHUB_ACTION_PATH}/gitleaks.toml")
+        fi
+
+        # --redact keeps a leaked value out of the job log
+        if [ -n "$BASE_SHA" ] && [ -n "$HEAD_SHA" ]; then
+          "$TOOL_DIR/gitleaks" git --redact --verbose "${CONFIG_ARGS[@]}" --log-opts "${BASE_SHA}..${HEAD_SHA}" .
+        else
+          "$TOOL_DIR/gitleaks" dir --redact --verbose "${CONFIG_ARGS[@]}" .
+        fi

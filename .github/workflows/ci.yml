@@ -50,3 +50,25 @@ jobs:
       # lint every run: block as well as the workflow schema itself
       - name: Lint workflows
         run: actionlint -color
+
+  # exceptions are in .github/zizmor.yml
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    env:
+      ZIZMOR_VERSION: "1.32.0"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install zizmor
+        run: pip install "zizmor==${ZIZMOR_VERSION}"
+
+      - name: Audit workflows and actions
+        run: zizmor --min-severity high --min-confidence medium .github/workflows .github/actions

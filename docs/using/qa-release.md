@@ -1,6 +1,6 @@
 # QA release pipeline (`qa-release.yml`)
 
-A push to `release-*` builds and scans that branch's image, pushes it, then
+A push to `release-*` first runs Semgrep, Gitleaks and a dependency scan, then builds and scans that branch's image, pushes it, then
 opens a PR in the charts repo bumping `qa/values.yaml`. Same actions as
 [dev](dev-pipeline.md), plus `resolve-pr-for-branch`, which only this stage
 needs.
@@ -14,8 +14,9 @@ calling it.
 
 ```mermaid
 flowchart TD
-    A["push to release-*"] --> B["resolve-pr-for-branch"]
-    A --> C["build-candidate-image<br/>release-x.y.z-svc, local only"]
+    A["push to release-*"] --> S["semgrep, gitleaks,<br/>dependency scan"]
+    S --> C["build-candidate-image<br/>release-x.y.z-svc, local only"]
+    A --> B["resolve-pr-for-branch"]
     C --> D["trivy-scan-and-comment<br/>pr-number from B"]
     D --> E["docker login + push"]
     E --> F["update-helm-chart<br/>mode: pr, qa/values.yaml"]

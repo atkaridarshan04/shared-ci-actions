@@ -24,6 +24,11 @@ on:
         description: Full yq path into the charts repo's values file, e.g. ".services.api.imageTag".
         required: true
         type: string
+      semgrep-configs:
+        description: Extra Semgrep packs for this stack, e.g. "p/python p/fastapi".
+        required: false
+        type: string
+        default: ""
       dockerfile-target:
         description: Optional --target stage; leave default for none.
         required: false
@@ -36,6 +41,12 @@ on:
         required: false
         type: string
         default: ""
+      fail-on-findings:
+        description: >-
+          Passed to the dependency scan. Set to "false" for report-only.
+        required: false
+        type: string
+        default: "true"
       integration-branch:
         description: Branch the values-bump PR targets, e.g. "develop".
         required: true
@@ -74,9 +85,46 @@ env:
   IMAGE_TAG: ${{ github.ref_name }}-${{ inputs.service-name }}
 
 jobs:
+  semgrep:
+    name: Semgrep Scan
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/semgrep-scan-and-comment@v1
+        with:
+          semgrep-configs: >-
+            ${{ inputs.semgrep-configs }}
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/gitleaks-scan@v1
+
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: atkaridarshan04/shared-ci-actions/.github/actions/trivy-scan-and-comment@v1
+        with:
+          scan-type: fs
+          label: ${{ inputs.service-label }} dependencies
+          artifact-name: trivy-dependency-reports
+          comment-header: trivy-dependency-scan
+          fail-on-findings: ${{ inputs.fail-on-findings }}
+
   build-scan-push:
     name: Build, Trivy Scan, and Push
     runs-on: ${{ inputs.runner }}
+    needs: [semgrep, secret-scan, dependency-scan]
     permissions:
       contents: read
       packages: write

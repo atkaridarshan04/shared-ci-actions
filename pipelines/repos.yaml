@@ -29,7 +29,7 @@ repos:
   #   service_name       image tag suffix, component-name, component-label
   #   service_label      human label in the Trivy comment header
   #   helm_key           yq path into the charts repo's values.yaml
-  #   semgrep_configs    space-separated packs, matched to the repo's stack
+  #   semgrep_configs    extra Semgrep packs for the stack, added to the baseline in the action
   #   dockerfile_target  optional --target stage
   #   build_args         optional newline-separated KEY=VALUE lines
   # plus any key from `defaults` above, to override it for this repo.
@@ -38,7 +38,7 @@ repos:
     service_name: api
     service_label: api
     helm_key: .services.api.imageTag
-    semgrep_configs: "p/python p/fastapi p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets p/sql-injection"
+    semgrep_configs: "p/python p/fastapi p/sql-injection"
     build_args: |
       APP_ENV=${{ vars.APP_ENV }}
 
@@ -46,11 +46,11 @@ repos:
     service_name: web
     service_label: web
     helm_key: .services.web.imageTag
-    semgrep_configs: "p/javascript p/typescript p/react p/nextjs p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
+    semgrep_configs: "p/javascript p/typescript p/react p/nextjs"
     dockerfile_target: runtime
 
   test-worker:
     service_name: worker
     service_label: worker
     helm_key: .services.worker.imageTag
-    semgrep_configs: "p/python p/dockerfile p/cwe-top-25 p/owasp-top-ten p/r2c-security-audit p/secure-defaults p/secrets"
+    semgrep_configs: "p/python"

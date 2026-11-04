@@ -34,8 +34,8 @@ Run `./scripts/verify.sh` before pushing changes here — it's exactly what CI r
 
 | File | Trigger | What it does |
 |:--|:--|:--|
-| `dev-pipeline.yml` | PR + push to `develop` | Semgrep → build → Trivy → PR comments. On merge: rebuild + rescan, commit `dev/values.yaml` |
-| `qa-release.yml` | push to `release-*` | Build → Trivy → push, then open a PR bumping `qa/values.yaml` |
+| `dev-pipeline.yml` | PR + push to `develop` | Semgrep, Gitleaks, dependency scan → build → Trivy → PR comments. On merge: rebuild + rescan, commit `dev/values.yaml` |
+| `qa-release.yml` | push to `release-*` | Semgrep, Gitleaks, dependency scan → build → Trivy → push, then open a PR bumping `qa/values.yaml` |
 
 Deploy config lives in a **separate Helm-charts repo**, so the pipeline never
 commits to the branch that triggered it.
@@ -96,7 +96,7 @@ repos:
   my-service:
     service_name: api
     helm_key: .services.api.imageTag
-    semgrep_configs: "p/python p/dockerfile p/secrets"
+    semgrep_configs: "p/python p/fastapi"
 ```
 
 Registry, release-branch pattern, and values paths are deliberately **not**
