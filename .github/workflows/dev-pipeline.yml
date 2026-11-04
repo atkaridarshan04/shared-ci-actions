@@ -132,21 +132,19 @@ jobs:
           fail-on-findings: ${{ inputs.fail-on-findings }}
 
   build-and-scan:
-    name: Build, Trivy Scan, and Push Candidate (PRs)
+    name: Build and Scan (PR)
     runs-on: ${{ inputs.runner }}
-    # the image is built and pushed only after the three scans pass
+    # built only after the three scans pass; a PR never pushes an image
     needs: [semgrep, secret-scan, dependency-scan]
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-      packages: write
       pull-requests: write
     env:
       CANDIDATE_TAG: pr-${{ github.event.pull_request.number }}-${{ inputs.service-name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # build and scan before logging in: nothing unscanned can reach the registry
       - uses: atkaridarshan04/shared-ci-actions/.github/actions/build-candidate-image@v1
         with:
           image-tag: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.CANDIDATE_TAG }}
@@ -160,17 +158,8 @@ jobs:
           label: ${{ inputs.service-label }} image
           fail-on-findings: ${{ inputs.fail-on-findings }}
 
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push scanned candidate image
-        run: docker push "${REGISTRY}/${IMAGE_NAME}:${CANDIDATE_TAG}"
-
   push-image:
-    name: Rebuild, Trivy Scan, and Push (push events)
+    name: Build, Scan and Push
     runs-on: ${{ inputs.runner }}
     if: github.event_name == 'push'
     permissions:
@@ -211,7 +200,7 @@ jobs:
         run: docker push "${REGISTRY}/${IMAGE_NAME}:${RELEASE_TAG}"
 
   update-helm-repo:
-    name: Update dev values.yaml in the Helm-charts repo
+    name: Update Helm values
     runs-on: ${{ inputs.runner }}
     needs: push-image
     if: github.event_name == 'push'
