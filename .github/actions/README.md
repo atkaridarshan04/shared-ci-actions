@@ -1,7 +1,7 @@
 # Shared CI actions
 
 Composite actions for the dev and QA pipelines: Semgrep, Gitleaks and Trivy scanning,
-build, push-candidate, rebuild-and-rescan-on-merge, Helm values update, and
+build, rebuild-and-rescan-on-merge, Helm values update, and
 PR resolution. Both pipelines call these through their own `workflow_call`
 reusable workflow (`dev-pipeline.yml`, `qa-release.yml`), so each is defined
 once instead of copy-pasted per repo.
@@ -159,8 +159,8 @@ fails its Trivy gate never reaches the registry.
 ## Rebuild + rescan on merge (dev-pipeline's push job)
 
 No separate action for this - the push job just calls `build-candidate-image`
-and `trivy-scan-and-comment` a second time, against a release tag instead of
-the PR's candidate tag. See [dev-pipeline](../../docs/using/dev-pipeline.md#build-on-the-pr-rebuild-and-rescan-on-merge)
+and `trivy-scan-and-comment` a second time, against a release tag. This is
+the build that pushes; the PR build doesn't. See [dev-pipeline](../../docs/using/dev-pipeline.md#build-on-the-pr-rebuild-and-rescan-on-merge)
 for why.
 
 ```yaml

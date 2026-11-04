@@ -130,6 +130,11 @@ runs:
         Path("trivy-comment.md").write_text("\n".join(lines) + "\n")
         PY
 
+    - name: Add Trivy results to job summary
+      if: always()
+      shell: bash
+      run: cat trivy-comment.md >> "$GITHUB_STEP_SUMMARY"
+
     - name: Comment Trivy results on PR
       if: always() && (github.event_name == 'pull_request' || inputs.pr-number != '')
       uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
